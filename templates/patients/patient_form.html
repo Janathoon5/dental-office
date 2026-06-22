@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} — Dental Office{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 760px;">
+    <div class="card-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">First Name *</label>
+                    <input type="text" name="first_name" value="{{ form.first_name.value|default:'' }}"
+                           class="form-control {% if form.first_name.errors %}is-invalid{% endif %}" required>
+                    {% for e in form.first_name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Last Name *</label>
+                    <input type="text" name="last_name" value="{{ form.last_name.value|default:'' }}"
+                           class="form-control {% if form.last_name.errors %}is-invalid{% endif %}" required>
+                    {% for e in form.last_name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Date of Birth *</label>
+                    <input type="date" name="date_of_birth" value="{{ form.date_of_birth.value|date:'Y-m-d'|default:'' }}"
+                           class="form-control {% if form.date_of_birth.errors %}is-invalid{% endif %}" required>
+                    {% for e in form.date_of_birth.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Phone *</label>
+                    <input type="text" name="phone" value="{{ form.phone.value|default:'' }}"
+                           class="form-control {% if form.phone.errors %}is-invalid{% endif %}" required>
+                    {% for e in form.phone.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Email</label>
+                    <input type="email" name="email" value="{{ form.email.value|default:'' }}"
+                           class="form-control {% if form.email.errors %}is-invalid{% endif %}">
+                    {% for e in form.email.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Address</label>
+                    <textarea name="address" rows="2" class="form-control">{{ form.address.value|default:'' }}</textarea>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Insurance Provider</label>
+                    <input type="text" name="insurance_provider" value="{{ form.insurance_provider.value|default:'' }}" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Insurance ID</label>
+                    <input type="text" name="insurance_id" value="{{ form.insurance_id.value|default:'' }}" class="form-control">
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Allergies</label>
+                    <textarea name="allergies" rows="2" class="form-control">{{ form.allergies.value|default:'' }}</textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Medical Notes</label>
+                    <textarea name="medical_notes" rows="3" class="form-control">{{ form.medical_notes.value|default:'' }}</textarea>
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Save Patient</button>
+                {% if patient %}
+                    <a href="{% url 'patient_detail' patient.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                {% else %}
+                    <a href="{% url 'patient_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% block title %}Reminders — Dental Office{% endblock %}
+{% block page_title %}Appointment Reminders{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<div class="row g-4">
+
+    <!-- Send panel -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header fw-semibold"><i class="bi bi-send me-2"></i>Send Reminders</div>
+            <div class="card-body">
+                <p class="text-muted small">Send email reminders to patients with upcoming appointments. Only patients with an email address on file will receive a reminder.</p>
+                <form method="post" action="{% url 'send_reminders_now' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Send for appointments in</label>
+                        <select name="days" class="form-select">
+                            <option value="1">Tomorrow (1 day ahead)</option>
+                            <option value="2">2 days ahead</option>
+                            <option value="3">3 days ahead</option>
+                            <option value="7">1 week ahead</option>
+                        </select>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="force" value="1" id="forceCheck">
+                        <label class="form-check-label small" for="forceCheck">
+                            Re-send even if already reminded
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-send me-2"></i>Send Now
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="bi bi-clock-history me-2"></i>Automate Daily Reminders</div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">To run reminders automatically every day, set up Windows Task Scheduler:</p>
+                <ol class="small text-muted ps-3">
+                    <li>Open <strong>Task Scheduler</strong> from the Start menu</li>
+                    <li>Click <strong>Create Basic Task</strong></li>
+                    <li>Set trigger: <strong>Daily</strong> at your preferred time (e.g. 8 AM)</li>
+                    <li>Action: <strong>Start a program</strong></li>
+                    <li>Program: <code>{{ python_path }}</code></li>
+                    <li>Arguments: <code>manage.py send_reminders</code></li>
+                    <li>Start in: <code>{{ project_path }}</code></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upcoming appointments -->
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header fw-semibold"><i class="bi bi-calendar-week me-2"></i>Upcoming Appointments (Next 7 Days)</div>
+            <div class="card-body p-0">
+                {% if upcoming %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Patient</th>
+                                <th>Type</th>
+                                <th>Email</th>
+                                <th>Reminder</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in upcoming %}
+                            <tr>
+                                <td>
+                                    <span class="fw-semibold">{{ item.appointment.date|date:"M j" }}</span>
+                                    <span class="text-muted small ms-1">
+                                        {% if item.days_away == 1 %}(tomorrow)
+                                        {% else %}({{ item.days_away }} days){% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="{% url 'patient_detail' item.appointment.patient.pk %}" class="text-decoration-none fw-semibold">
+                                        {{ item.appointment.patient.full_name }}
+                                    </a>
+                                </td>
+                                <td>{{ item.appointment.get_appointment_type_display }}</td>
+                                <td>
+                                    {% if item.has_email %}
+                                        <span class="text-success small"><i class="bi bi-check-circle"></i> {{ item.appointment.patient.email }}</span>
+                                    {% else %}
+                                        <span class="text-danger small"><i class="bi bi-x-circle"></i> No email</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.reminded %}
+                                        <span class="badge bg-success"><i class="bi bi-check"></i> Sent</span>
+                                    {% elif not item.has_email %}
+                                        <span class="badge bg-secondary">No email</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Pending</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-calendar-check" style="font-size:2rem;"></i>
+                    <p class="mt-2">No scheduled appointments in the next 7 days.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Recent reminder history -->
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="bi bi-journal-text me-2"></i>Recent Reminder History</div>
+            <div class="card-body p-0">
+                {% if recent_logs %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Sent At</th><th>Patient</th><th>Appt Date</th><th>Email</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for log in recent_logs %}
+                            <tr>
+                                <td class="text-muted small">{{ log.sent_at|date:"M j, g:i A" }}</td>
+                                <td>
+                                    <a href="{% url 'patient_detail' log.appointment.patient.pk %}" class="text-decoration-none">
+                                        {{ log.appointment.patient.full_name }}
+                                    </a>
+                                </td>
+                                <td>{{ log.appointment.date|date:"M j, Y" }}</td>
+                                <td class="small">{{ log.recipient_email|default:"—" }}</td>
+                                <td>
+                                    {% if log.status == 'sent' %}
+                                        <span class="badge bg-success">Sent</span>
+                                    {% elif log.status == 'failed' %}
+                                        <span class="badge bg-danger" title="{{ log.error_message }}">Failed</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">No Email</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">No reminders sent yet.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

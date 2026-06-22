@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}Treatment Plan — Dental Office{% endblock %}
+{% block page_title %}Treatment Plan{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="bi bi-list-check me-2"></i>Plan Info</div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-5 text-muted">Patient</dt>
+                    <dd class="col-7"><a href="{% url 'patient_detail' plan.patient.pk %}">{{ plan.patient.full_name }}</a></dd>
+                    <dt class="col-5 text-muted">Title</dt>
+                    <dd class="col-7">{{ plan.title }}</dd>
+                    <dt class="col-5 text-muted">Status</dt>
+                    <dd class="col-7"><span class="badge bg-secondary">{{ plan.get_status_display }}</span></dd>
+                    <dt class="col-5 text-muted">Created</dt>
+                    <dd class="col-7">{{ plan.created_date|date:"M j, Y" }}</dd>
+                    <dt class="col-5 text-muted">Est. Total</dt>
+                    <dd class="col-7 fw-bold">${{ plan.total_cost }}</dd>
+                </dl>
+                {% if plan.notes %}
+                    <hr>
+                    <p class="text-muted small mb-0">{{ plan.notes }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header fw-semibold">Treatment Items</div>
+            <div class="card-body p-0">
+                {% if plan.items.all %}
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Procedure</th><th>Tooth</th><th>Est. Cost</th><th>Status</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            {% for item in plan.items.all %}
+                            <tr class="{% if item.status == 'completed' %}table-success{% endif %}">
+                                <td>{{ item.procedure }}</td>
+                                <td>{{ item.tooth_number|default:"—" }}</td>
+                                <td>${{ item.estimated_cost }}</td>
+                                <td>
+                                    <span class="badge {% if item.status == 'completed' %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                                        {{ item.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="{% url 'plan_item_toggle' item.pk %}" class="btn btn-sm btn-outline-secondary">
+                                        {% if item.status == 'pending' %}Mark Done{% else %}Undo{% endif %}
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="text-center py-4 text-muted">No items added yet.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="bi bi-plus-circle me-2"></i>Add Item</div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Procedure *</label>
+                            {{ item_form.procedure }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-semibold">Tooth #</label>
+                            {{ item_form.tooth_number }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Est. Cost ($)</label>
+                            {{ item_form.estimated_cost }}
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">Add</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+    input[type=text], input[type=number], select {
+        display:block; width:100%; padding:.375rem .75rem;
+        font-size:1rem; border:1px solid #dee2e6; border-radius:.375rem;
+    }
+</style>
+{% endblock %}

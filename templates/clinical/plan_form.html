@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} — Dental Office{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:580px;">
+    <div class="card-header">
+        <span class="fw-semibold">Patient: <a href="{% url 'patient_detail' patient.pk %}">{{ patient.full_name }}</a></span>
+    </div>
+    <div class="card-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {{ form.patient }}
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Plan Title *</label>
+                    {{ form.title }}
+                    {% for e in form.title.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Status</label>
+                    {{ form.status }}
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Notes</label>
+                    {{ form.notes }}
+                </div>
+            </div>
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Create Plan</button>
+                <a href="{% url 'patient_detail' patient.pk %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+<style>
+    select, input[type=text], textarea {
+        display:block; width:100%; padding:.375rem .75rem;
+        font-size:1rem; border:1px solid #dee2e6; border-radius:.375rem;
+    }
+</style>
+{% endblock %}

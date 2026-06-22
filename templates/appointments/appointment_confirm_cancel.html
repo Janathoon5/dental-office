@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Cancel Appointment — Dental Office{% endblock %}
+{% block page_title %}Cancel Appointment{% endblock %}
+
+{% block content %}
+<div class="card border-danger" style="max-width: 480px;">
+    <div class="card-body">
+        <h5 class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Cancellation</h5>
+        <p>Are you sure you want to cancel this appointment?</p>
+        <dl class="row">
+            <dt class="col-4 text-muted">Patient</dt>
+            <dd class="col-8">{{ appointment.patient.full_name }}</dd>
+            <dt class="col-4 text-muted">Date</dt>
+            <dd class="col-8">{{ appointment.date|date:"M j, Y" }} at {{ appointment.start_time|time:"g:i A" }}</dd>
+            <dt class="col-4 text-muted">Type</dt>
+            <dd class="col-8">{{ appointment.get_appointment_type_display }}</dd>
+        </dl>
+        <form method="post" class="d-flex gap-2 mt-3">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Yes, Cancel It</button>
+            <a href="{% url 'appointment_detail' appointment.pk %}" class="btn btn-outline-secondary">Keep Appointment</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

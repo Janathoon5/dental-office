@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} — Dental Office{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 640px;">
+    <div class="card-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Patient *</label>
+                    {{ form.patient }}
+                    {% for e in form.patient.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Date *</label>
+                    {{ form.date }}
+                    {% for e in form.date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Start Time *</label>
+                    {{ form.start_time }}
+                    {% for e in form.start_time.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Duration (minutes)</label>
+                    {{ form.duration_minutes }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Type</label>
+                    {{ form.appointment_type }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Status</label>
+                    {{ form.status }}
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Dentist / Provider</label>
+                    {{ form.dentist }}
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Notes</label>
+                    {{ form.notes }}
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Save Appointment</button>
+                {% if appointment %}
+                    <a href="{% url 'appointment_detail' appointment.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                {% else %}
+                    <a href="{% url 'appointment_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    select, input[type=date], input[type=time], input[type=number], textarea {
+        display: block; width: 100%;
+        padding: .375rem .75rem;
+        font-size: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: .375rem;
+    }
+</style>
+{% endblock %}

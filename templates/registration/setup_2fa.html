@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Set Up 2FA — Dental Office{% endblock %}
+{% block page_title %}Set Up Two-Factor Authentication{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:520px;">
+    <div class="card-body">
+        <p class="text-muted">Scan the QR code below with an authenticator app (Google Authenticator, Authy, or any TOTP app), then enter the 6-digit code to confirm setup.</p>
+
+        <div class="text-center my-4">
+            <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" style="width:200px; height:200px; border:1px solid #dee2e6; border-radius:8px;">
+        </div>
+
+        <p class="text-muted small text-center mb-1">Can't scan? Enter this key manually in your app:</p>
+        <div class="bg-light rounded p-2 text-center fw-bold letter-spacing-2 mb-4" style="font-family:monospace; font-size:1.1rem;">
+            {{ secret }}
+        </div>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-danger py-2 small">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            <label class="form-label fw-semibold">Enter the 6-digit code to confirm</label>
+            <input type="text" name="otp" class="form-control mb-3"
+                   maxlength="6" inputmode="numeric" placeholder="000000"
+                   autofocus autocomplete="one-time-code" required
+                   style="font-size:1.3rem; letter-spacing:0.4rem; text-align:center;">
+            <button type="submit" class="btn btn-primary w-100">Enable 2FA</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

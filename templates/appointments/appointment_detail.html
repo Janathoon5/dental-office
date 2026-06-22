@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Appointment — Dental Office{% endblock %}
+{% block page_title %}Appointment Detail{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 640px;">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-calendar-check me-2"></i>{{ appointment.date|date:"l, F j, Y" }} at {{ appointment.start_time|time:"g:i A" }}</span>
+        <span class="badge badge-{{ appointment.status }} fs-6">{{ appointment.get_status_display }}</span>
+    </div>
+    <div class="card-body">
+        <dl class="row">
+            <dt class="col-4 text-muted">Patient</dt>
+            <dd class="col-8">
+                <a href="{% url 'patient_detail' appointment.patient.pk %}">{{ appointment.patient.full_name }}</a>
+            </dd>
+
+            <dt class="col-4 text-muted">Type</dt>
+            <dd class="col-8">{{ appointment.get_appointment_type_display }}</dd>
+
+            <dt class="col-4 text-muted">Dentist</dt>
+            <dd class="col-8">{{ appointment.dentist.get_full_name|default:"Not assigned" }}</dd>
+
+            <dt class="col-4 text-muted">Duration</dt>
+            <dd class="col-8">{{ appointment.duration_minutes }} minutes</dd>
+
+            <dt class="col-4 text-muted">Notes</dt>
+            <dd class="col-8">{{ appointment.notes|default:"—"|linebreaksbr }}</dd>
+        </dl>
+
+        <div class="d-flex gap-2 mt-3">
+            <a href="{% url 'appointment_edit' appointment.pk %}" class="btn btn-primary">Edit</a>
+            {% if appointment.status == 'scheduled' %}
+                <a href="{% url 'appointment_cancel' appointment.pk %}" class="btn btn-outline-danger">Cancel Appointment</a>
+            {% endif %}
+            <a href="{% url 'appointment_list' %}?date={{ appointment.date|date:'Y-m-d' }}" class="btn btn-outline-secondary">Back to Day View</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

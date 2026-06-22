@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — Dental Office{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Total Patients</div>
+                <div class="fs-2 fw-bold text-dark">{{ stats.total_patients }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Today's Appointments</div>
+                <div class="fs-2 fw-bold text-dark">{{ stats.appointments_today }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">This Week</div>
+                <div class="fs-2 fw-bold text-dark">{{ stats.appointments_this_week }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Upcoming Scheduled</div>
+                <div class="fs-2 fw-bold text-dark">{{ stats.upcoming }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-calendar-day me-2"></i>Today's Schedule — {{ today|date:"l, F j" }}</span>
+        <a href="{% url 'appointment_add' %}?date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-lg"></i> Book Appointment
+        </a>
+    </div>
+    <div class="card-body p-0">
+        {% if todays_appointments %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Time</th>
+                            <th>Patient</th>
+                            <th>Type</th>
+                            <th>Dentist</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for appt in todays_appointments %}
+                        <tr>
+                            <td class="fw-semibold">{{ appt.start_time|time:"g:i A" }}</td>
+                            <td>
+                                <a href="{% url 'patient_detail' appt.patient.pk %}" class="text-decoration-none fw-semibold">
+                                    {{ appt.patient.full_name }}
+                                </a>
+                            </td>
+                            <td>{{ appt.get_appointment_type_display }}</td>
+                            <td>{{ appt.dentist.get_full_name|default:"—" }}</td>
+                            <td>
+                                <span class="badge badge-{{ appt.status }}">{{ appt.get_status_display }}</span>
+                            </td>
+                            <td>
+                                <a href="{% url 'appointment_detail' appt.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-calendar-check" style="font-size:2rem;"></i>
+                <p class="mt-2">No appointments scheduled for today.</p>
+                <a href="{% url 'appointment_add' %}?date={{ today|date:'Y-m-d' }}" class="btn btn-primary">Book First Appointment</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

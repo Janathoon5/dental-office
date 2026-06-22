@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}Appointments — Dental Office{% endblock %}
+{% block page_title %}Appointments{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <a href="?date={{ prev_date|date:'Y-m-d' }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+            <span class="fw-semibold">{{ selected_date|date:"l, F j, Y" }}</span>
+            <a href="?date={{ next_date|date:'Y-m-d' }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+            <a href="?" class="btn btn-sm btn-outline-primary ms-1">Today</a>
+        </div>
+        <form class="d-flex gap-2" method="get">
+            <input type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}" class="form-control form-control-sm" style="width:160px;">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Go</button>
+        </form>
+        <a href="{% url 'appointment_add' %}?date={{ selected_date|date:'Y-m-d' }}" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-lg"></i> Book Appointment
+        </a>
+    </div>
+    <div class="card-body p-0">
+        {% if appointments %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Time</th>
+                            <th>Duration</th>
+                            <th>Patient</th>
+                            <th>Type</th>
+                            <th>Dentist</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for appt in appointments %}
+                        <tr>
+                            <td class="fw-semibold">{{ appt.start_time|time:"g:i A" }}</td>
+                            <td>{{ appt.duration_minutes }} min</td>
+                            <td>
+                                <a href="{% url 'patient_detail' appt.patient.pk %}" class="text-decoration-none fw-semibold">
+                                    {{ appt.patient.full_name }}
+                                </a>
+                            </td>
+                            <td>{{ appt.get_appointment_type_display }}</td>
+                            <td>{{ appt.dentist.get_full_name|default:"—" }}</td>
+                            <td><span class="badge badge-{{ appt.status }}">{{ appt.get_status_display }}</span></td>
+                            <td class="d-flex gap-1">
+                                <a href="{% url 'appointment_detail' appt.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+                                <a href="{% url 'appointment_edit' appt.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-calendar-x" style="font-size:2rem;"></i>
+                <p class="mt-2">No appointments for this day.</p>
+                <a href="{% url 'appointment_add' %}?date={{ selected_date|date:'Y-m-d' }}" class="btn btn-primary">Book Appointment</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

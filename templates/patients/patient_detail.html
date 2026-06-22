@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+{% block title %}{{ patient.full_name }} — Dental Office{% endblock %}
+{% block page_title %}Patient: {{ patient.full_name }}{% endblock %}
+
+{% block content %}
+
+{% with alerts=patient.medical_alerts.all %}
+{% if alerts %}
+<div class="mb-4">
+    {% for alert in alerts %}
+    <div class="d-flex align-items-center gap-3 rounded p-3 mb-2
+        {% if alert.severity == 'high' %}bg-danger text-white
+        {% elif alert.severity == 'medium' %}bg-warning text-dark
+        {% else %}bg-info text-white{% endif %}">
+        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+        <div class="flex-grow-1">
+            <span class="fw-bold">{{ alert.get_alert_type_display }}</span>
+            <span class="mx-2">—</span>
+            {{ alert.description }}
+            <span class="ms-2 badge {% if alert.severity == 'high' %}bg-white text-danger{% elif alert.severity == 'medium' %}bg-dark text-white{% else %}bg-white text-info{% endif %}">
+                {{ alert.get_severity_display }}
+            </span>
+        </div>
+        <form method="post" action="{% url 'alert_delete' alert.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-link p-0
+                {% if alert.severity == 'high' %}text-white{% elif alert.severity == 'medium' %}text-dark{% else %}text-white{% endif %}"
+                title="Remove alert" onclick="return confirm('Remove this alert?')">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <!-- Patient Info -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-person me-2"></i>Patient Info</span>
+                <a href="{% url 'patient_edit' patient.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-5 text-muted">Date of Birth</dt>
+                    <dd class="col-7">{{ patient.date_of_birth|date:"M j, Y" }}</dd>
+                    <dt class="col-5 text-muted">Phone</dt>
+                    <dd class="col-7">{{ patient.phone }}</dd>
+                    <dt class="col-5 text-muted">Email</dt>
+                    <dd class="col-7">{{ patient.email|default:"—" }}</dd>
+                    <dt class="col-5 text-muted">Address</dt>
+                    <dd class="col-7">{{ patient.address|default:"—"|linebreaksbr }}</dd>
+                    <dt class="col-5 text-muted">Insurance</dt>
+                    <dd class="col-7">{{ patient.insurance_provider|default:"—" }}</dd>
+                    <dt class="col-5 text-muted">Insurance ID</dt>
+                    <dd class="col-7">{{ patient.insurance_id|default:"—" }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Medical Alerts -->
+        <div class="card mb-3 border-danger">
+            <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-exclamation-triangle me-2"></i>Medical Alerts</span>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{% url 'alert_add' patient.pk %}" class="mb-0">
+                    {% csrf_token %}
+                    <div class="row g-2 align-items-end">
+                        <div class="col-5">
+                            <label class="form-label small fw-semibold mb-1">Type</label>
+                            {{ alert_form.alert_type }}
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small fw-semibold mb-1">Severity</label>
+                            {{ alert_form.severity }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold mb-1">Description</label>
+                            {{ alert_form.description }}
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-danger btn-sm w-100">
+                                <i class="bi bi-plus-lg me-1"></i>Add Alert
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if patient.medical_notes %}
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="bi bi-clipboard2-pulse me-2"></i>Medical Notes</div>
+            <div class="card-body">{{ patient.medical_notes|linebreaksbr }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-8">
+        <!-- Appointments -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-calendar3 me-2"></i>Appointments</span>
+                <a href="{% url 'appointment_add' %}?patient={{ patient.pk }}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-lg"></i> Book Appointment
+                </a>
+            </div>
+            <div class="card-body p-0">
+                {% if appointments %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr><th>Date</th><th>Time</th><th>Type</th><th>Dentist</th><th>Status</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                {% for appt in appointments %}
+                                <tr>
+                                    <td>{{ appt.date|date:"M j, Y" }}</td>
+                                    <td>{{ appt.start_time|time:"g:i A" }}</td>
+                                    <td>{{ appt.get_appointment_type_display }}</td>
+                                    <td>{{ appt.dentist.get_full_name|default:"—" }}</td>
+                                    <td><span class="badge badge-{{ appt.status }}">{{ appt.get_status_display }}</span></td>
+                                    <td><a href="{% url 'appointment_detail' appt.pk %}" class="btn btn-sm btn-outline-secondary">View</a></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4 text-muted">No appointments on record.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Treatment Records -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-clipboard2-pulse me-2"></i>Treatment Records</span>
+                <a href="{% url 'record_add' patient.pk %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-lg"></i> Add Record
+                </a>
+            </div>
+            <div class="card-body p-0">
+                {% if patient.treatment_records.all %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr><th>Date</th><th>Procedure</th><th>Tooth</th><th>Dentist</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                {% for rec in patient.treatment_records.all %}
+                                <tr>
+                                    <td>{{ rec.date|date:"M j, Y" }}</td>
+                                    <td>{{ rec.procedure }}</td>
+                                    <td>{{ rec.tooth_number|default:"—" }}</td>
+                                    <td>{{ rec.dentist.get_full_name|default:"—" }}</td>
+                                    <td><a href="{% url 'record_edit' rec.pk %}" class="btn btn-sm btn-outline-primary">Edit</a></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4 text-muted">No treatment records yet.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Treatment Plans -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-list-check me-2"></i>Treatment Plans</span>
+                <a href="{% url 'plan_add' patient.pk %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-lg"></i> New Plan
+                </a>
+            </div>
+            <div class="card-body p-0">
+                {% if patient.treatment_plans.all %}
+                    <ul class="list-group list-group-flush">
+                        {% for plan in patient.treatment_plans.all %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="fw-semibold">{{ plan.title }}</span>
+                                <span class="ms-2 badge bg-secondary">{{ plan.get_status_display }}</span>
+                            </div>
+                            <a href="{% url 'plan_detail' plan.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="text-center py-4 text-muted">No treatment plans yet.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Invoices -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-receipt me-2"></i>Invoices</span>
+                <a href="{% url 'invoice_add' %}?patient={{ patient.pk }}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-lg"></i> New Invoice
+                </a>
+            </div>
+            <div class="card-body p-0">
+                {% if patient.invoices.all %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr><th>Date</th><th>Total</th><th>Insurance</th><th>Patient Owes</th><th>Status</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                {% for inv in patient.invoices.all %}
+                                <tr>
+                                    <td>{{ inv.date_issued|date:"M j, Y" }}</td>
+                                    <td>${{ inv.subtotal }}</td>
+                                    <td>${{ inv.insurance_amount }}</td>
+                                    <td>${{ inv.patient_owes }}</td>
+                                    <td>
+                                        <span class="badge {% if inv.status == 'paid' %}bg-success{% elif inv.status == 'partial' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                            {{ inv.get_status_display }}
+                                        </span>
+                                    </td>
+                                    <td><a href="{% url 'invoice_detail' inv.pk %}" class="btn btn-sm btn-outline-secondary">View</a></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4 text-muted">No invoices yet.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    select, input[type=text] { display:block; width:100%; padding:.25rem .5rem; font-size:.875rem; border:1px solid #dee2e6; border-radius:.375rem; }
+</style>
+{% endblock %}

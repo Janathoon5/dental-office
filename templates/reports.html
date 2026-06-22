@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}Reports — Dental Office{% endblock %}
+{% block page_title %}Reports{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-sm-4">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Total Revenue (6 months)</div>
+                <div class="fs-2 fw-bold text-dark">${{ total_revenue|floatformat:2 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Pending Invoices</div>
+                <div class="fs-2 fw-bold text-danger">{{ pending_invoices }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">New Patients This Month</div>
+                <div class="fs-2 fw-bold text-dark">{{ new_patients_month }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="bi bi-bar-chart me-2"></i>Monthly Revenue (Last 6 Months)</div>
+            <div class="card-body">
+                <canvas id="revenueChart" height="120"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="bi bi-pie-chart me-2"></i>Appointments by Type (Last 30 Days)</div>
+            <div class="card-body">
+                <canvas id="typeChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+const revenueCtx = document.getElementById('revenueChart');
+new Chart(revenueCtx, {
+    type: 'bar',
+    data: {
+        labels: {{ revenue_labels|safe }},
+        datasets: [
+            {
+                label: 'Patient Portion',
+                data: {{ revenue_patient|safe }},
+                backgroundColor: '#1a3a5c',
+                borderRadius: 4,
+            },
+            {
+                label: 'Insurance',
+                data: {{ revenue_insurance|safe }},
+                backgroundColor: '#90afc5',
+                borderRadius: 4,
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } },
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+    }
+});
+
+const typeCtx = document.getElementById('typeChart');
+new Chart(typeCtx, {
+    type: 'doughnut',
+    data: {
+        labels: {{ type_labels|safe }},
+        datasets: [{
+            data: {{ type_counts|safe }},
+            backgroundColor: ['#1a3a5c','#2e6da4','#5b9bd5','#90afc5','#c6d9f1','#e8f0f9'],
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } }
+    }
+});
+</script>
+{% endblock %}

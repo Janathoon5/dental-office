@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% block title %}Invoice #{{ invoice.pk }} — Dental Office{% endblock %}
+{% block page_title %}Invoice #{{ invoice.pk }}{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-receipt me-2"></i>Invoice Details</span>
+                <a href="{% url 'invoice_edit' invoice.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-5 text-muted">Patient</dt>
+                    <dd class="col-7"><a href="{% url 'patient_detail' invoice.patient.pk %}">{{ invoice.patient.full_name }}</a></dd>
+
+                    <dt class="col-5 text-muted">Date Issued</dt>
+                    <dd class="col-7">{{ invoice.date_issued|date:"M j, Y" }}</dd>
+
+                    {% if invoice.appointment %}
+                    <dt class="col-5 text-muted">Appointment</dt>
+                    <dd class="col-7"><a href="{% url 'appointment_detail' invoice.appointment.pk %}">{{ invoice.appointment.date|date:"M j, Y" }}</a></dd>
+                    {% endif %}
+
+                    <dt class="col-5 text-muted">Subtotal</dt>
+                    <dd class="col-7">${{ invoice.subtotal }}</dd>
+
+                    <dt class="col-5 text-muted">Insurance Covers</dt>
+                    <dd class="col-7 text-success">-${{ invoice.insurance_amount }}</dd>
+
+                    <dt class="col-5 text-muted">Patient Owes</dt>
+                    <dd class="col-7 fw-bold">${{ invoice.patient_owes }}</dd>
+
+                    <dt class="col-5 text-muted">Amount Paid</dt>
+                    <dd class="col-7 text-success">-${{ invoice.amount_paid }}</dd>
+
+                    <dt class="col-5 text-muted">Balance Due</dt>
+                    <dd class="col-7 fw-bold fs-5 {% if invoice.balance_due > 0 %}text-danger{% else %}text-success{% endif %}">
+                        ${{ invoice.balance_due }}
+                    </dd>
+
+                    <dt class="col-5 text-muted">Status</dt>
+                    <dd class="col-7">
+                        <span class="badge {% if invoice.status == 'paid' %}bg-success{% elif invoice.status == 'partial' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                            {{ invoice.get_status_display }}
+                        </span>
+                    </dd>
+                </dl>
+                {% if invoice.notes %}<hr><p class="text-muted small mb-0">{{ invoice.notes }}</p>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <!-- Payment history -->
+        <div class="card mb-3">
+            <div class="card-header fw-semibold"><i class="bi bi-cash-coin me-2"></i>Payment History</div>
+            <div class="card-body p-0">
+                {% if invoice.payments.all %}
+                    <table class="table mb-0">
+                        <thead class="table-light">
+                            <tr><th>Date</th><th>Amount</th><th>Method</th><th>Notes</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for p in invoice.payments.all %}
+                            <tr>
+                                <td>{{ p.date|date:"M j, Y" }}</td>
+                                <td class="text-success fw-semibold">${{ p.amount }}</td>
+                                <td>{{ p.get_method_display }}</td>
+                                <td>{{ p.notes|default:"—" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="text-center py-3 text-muted">No payments recorded yet.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Record payment -->
+        {% if invoice.status != 'paid' %}
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="bi bi-plus-circle me-2"></i>Record Payment</div>
+            <div class="card-body">
+                <form method="post" action="{% url 'payment_add' invoice.pk %}" novalidate>
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Amount ($) *</label>
+                            {{ payment_form.amount }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Method</label>
+                            {{ payment_form.method }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Notes</label>
+                            {{ payment_form.notes }}
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success mt-3">Record Payment</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+<style>
+    select, input[type=text], input[type=number], textarea {
+        display:block; width:100%; padding:.375rem .75rem;
+        font-size:1rem; border:1px solid #dee2e6; border-radius:.375rem;
+    }
+</style>
+{% endblock %}

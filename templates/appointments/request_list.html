@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Appointment Requests — Dental Office{% endblock %}
+{% block page_title %}Appointment Requests{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header fw-semibold"><i class="bi bi-inbox me-2"></i>Patient Requests</div>
+    <div class="card-body p-0">
+        {% if requests %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Submitted</th>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Preferred Date</th>
+                        <th>Type</th>
+                        <th>Message</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in requests %}
+                    <tr>
+                        <td class="text-muted small">{{ req.submitted_at|date:"M j, g:i A" }}</td>
+                        <td class="fw-semibold">{{ req.first_name }} {{ req.last_name }}<br><small class="text-muted">{{ req.phone }}</small></td>
+                        <td>{{ req.phone }}</td>
+                        <td>{{ req.preferred_date|date:"M j, Y" }} at {{ req.preferred_time|time:"g:i A" }}</td>
+                        <td>{{ req.get_appointment_type_display }}</td>
+                        <td><small>{{ req.message|default:"—"|truncatechars:60 }}</small></td>
+                        <td>
+                            <span class="badge {% if req.status == 'approved' %}bg-success{% elif req.status == 'declined' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                                {{ req.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if req.status == 'pending' %}
+                            <form method="post" action="{% url 'request_update' req.pk %}" class="d-flex gap-1">
+                                {% csrf_token %}
+                                <button name="status" value="approved" class="btn btn-sm btn-success">Approve</button>
+                                <button name="status" value="declined" class="btn btn-sm btn-outline-danger">Decline</button>
+                            </form>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox" style="font-size:2rem;"></i>
+            <p class="mt-2">No appointment requests yet.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
