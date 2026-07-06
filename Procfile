@@ -1,2 +1,2 @@
-release: python manage.py migrate && python manage.py collectstatic --noinput
-web: gunicorn dental_office.wsgi --log-file -
+release: python manage.py migrate
+web: python manage.py collectstatic --noinput && gunicorn dental_office.wsgi --log-file -
