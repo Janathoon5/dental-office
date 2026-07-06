@@ -1,0 +1,54 @@
+{% extends "patient_portal/base.html" %}
+
+{% block title %}My Profile — Dental Office{% endblock %}
+{% block page_title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-7">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-person me-1"></i> Personal Information
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="text-muted small">Name</div>
+                    <div class="fw-semibold">{{ patient.full_name }}</div>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted small">Date of Birth</div>
+                    <div>{{ patient.date_of_birth|date:"F j, Y" }}</div>
+                </div>
+                {% if patient.insurance_provider %}
+                <div class="mb-3">
+                    <div class="text-muted small">Insurance</div>
+                    <div>{{ patient.insurance_provider }}{% if patient.insurance_id %} — ID: {{ patient.insurance_id }}{% endif %}</div>
+                </div>
+                {% endif %}
+                <p class="text-muted small mb-0">To update your name, date of birth, or insurance information, please contact the office directly.</p>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-pencil me-1"></i> Update Contact Info
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}
+                            <div class="text-danger small mt-1">{{ field.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

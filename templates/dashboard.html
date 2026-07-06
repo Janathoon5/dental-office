@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="row g-3 mb-4">
-    <div class="col-sm-6 col-xl-3">
+    <div class="col-sm-6 col-xl">
         <div class="card stat-card h-100">
             <div class="card-body">
                 <div class="text-muted small mb-1">Total Patients</div>
@@ -12,7 +12,7 @@
             </div>
         </div>
     </div>
-    <div class="col-sm-6 col-xl-3">
+    <div class="col-sm-6 col-xl">
         <div class="card stat-card h-100">
             <div class="card-body">
                 <div class="text-muted small mb-1">Today's Appointments</div>
@@ -20,7 +20,17 @@
             </div>
         </div>
     </div>
-    <div class="col-sm-6 col-xl-3">
+    {% if my_appointments_today is not None %}
+    <div class="col-sm-6 col-xl">
+        <div class="card h-100" style="border-left:4px solid #0dcaf0;">
+            <div class="card-body">
+                <div class="text-muted small mb-1">My Schedule Today</div>
+                <div class="fs-2 fw-bold text-dark">{{ my_appointments_today }}</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    <div class="col-sm-6 col-xl">
         <div class="card stat-card h-100">
             <div class="card-body">
                 <div class="text-muted small mb-1">This Week</div>
@@ -28,11 +38,21 @@
             </div>
         </div>
     </div>
-    <div class="col-sm-6 col-xl-3">
+    <div class="col-sm-6 col-xl">
         <div class="card stat-card h-100">
             <div class="card-body">
                 <div class="text-muted small mb-1">Upcoming Scheduled</div>
                 <div class="fs-2 fw-bold text-dark">{{ stats.upcoming }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl">
+        <div class="card h-100" style="border-left:4px solid {% if pending_requests > 0 %}#ffc107{% else %}#1a3a5c{% endif %};">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Pending Requests</div>
+                <div class="fs-2 fw-bold {% if pending_requests > 0 %}text-warning{% else %}text-dark{% endif %}">
+                    {{ pending_requests }}
+                </div>
             </div>
         </div>
     </div>

@@ -7,11 +7,12 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import TOTPDevice
+from dental_office.roles import get_post_login_redirect
 
 
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        return redirect(get_post_login_redirect(request.user))
 
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
@@ -34,7 +35,7 @@ def login_view(request):
 
         # No 2FA set up — log in directly
         login(request, user)
-        return redirect(request.POST.get('next') or 'dashboard')
+        return redirect(request.POST.get('next') or get_post_login_redirect(user))
 
     return render(request, 'registration/login.html')
 
@@ -58,7 +59,7 @@ def verify_otp(request):
         if totp.verify(otp, valid_window=1):
             del request.session['pending_2fa_user']
             login(request, user)
-            return redirect('dashboard')
+            return redirect(get_post_login_redirect(user))
         else:
             messages.error(request, 'Invalid code. Please try again.')
 

@@ -1,12 +1,13 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
+from dental_office.roles import dentist_required, staff_required
 from patients.models import Patient
 from appointments.models import Appointment
 from .models import TreatmentRecord, TreatmentPlan, TreatmentPlanItem
 from .forms import TreatmentRecordForm, TreatmentPlanForm, TreatmentPlanItemForm
 
 
-@login_required
+@dentist_required
 def record_add(request, patient_pk):
     patient = get_object_or_404(Patient, pk=patient_pk)
     initial = {'patient': patient}
@@ -34,7 +35,7 @@ def record_add(request, patient_pk):
     })
 
 
-@login_required
+@dentist_required
 def record_edit(request, pk):
     record = get_object_or_404(TreatmentRecord, pk=pk)
     if request.method == 'POST':
@@ -49,7 +50,7 @@ def record_edit(request, pk):
     })
 
 
-@login_required
+@dentist_required
 def plan_add(request, patient_pk):
     patient = get_object_or_404(Patient, pk=patient_pk)
     if request.method == 'POST':
@@ -65,7 +66,7 @@ def plan_add(request, patient_pk):
     })
 
 
-@login_required
+@staff_required
 def plan_detail(request, pk):
     plan = get_object_or_404(TreatmentPlan, pk=pk)
     item_form = TreatmentPlanItemForm()
@@ -81,7 +82,7 @@ def plan_detail(request, pk):
     })
 
 
-@login_required
+@dentist_required
 def plan_item_toggle(request, pk):
     item = get_object_or_404(TreatmentPlanItem, pk=pk)
     item.status = 'completed' if item.status == 'pending' else 'pending'

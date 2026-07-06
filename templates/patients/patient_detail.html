@@ -61,6 +61,54 @@
             </div>
         </div>
 
+        <!-- Patient Portal -->
+        <div class="card mb-3">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-person-lock me-2"></i>Patient Portal</span>
+                {% if patient_has_portal %}
+                <span class="badge bg-success">Active</span>
+                {% endif %}
+            </div>
+            <div class="card-body py-2">
+                {% if patient_has_portal %}
+                    <p class="text-muted small mb-0">
+                        <i class="bi bi-check-circle me-1 text-success"></i>
+                        {{ patient.first_name }} has an active portal account.
+                    </p>
+                {% elif not patient.email %}
+                    <p class="text-muted small mb-0">
+                        <i class="bi bi-envelope-x me-1"></i>
+                        No email on file.
+                        <a href="{% url 'patient_edit' patient.pk %}">Add email</a>
+                        to send an invite.
+                    </p>
+                {% else %}
+                    {% with last_invite=patient.invites.first %}
+                    {% if last_invite and not last_invite.used %}
+                    <p class="text-muted small mb-2">
+                        <i class="bi bi-clock me-1"></i>
+                        Invite sent {{ last_invite.created_at|timesince }} ago — awaiting signup.
+                    </p>
+                    <form method="post" action="{% url 'send_patient_invite' patient.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-send me-1"></i>Resend Invite
+                        </button>
+                    </form>
+                    {% else %}
+                    <p class="text-muted small mb-2">No portal account yet.</p>
+                    <form method="post" action="{% url 'send_patient_invite' patient.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-send me-1"></i>Send Portal Invite
+                        </button>
+                    </form>
+                    {% endif %}
+                    {% endwith %}
+                {% endif %}
+            </div>
+        </div>
+
         <!-- Medical Alerts -->
         <div class="card mb-3 border-danger">
             <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
@@ -140,9 +188,11 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span class="fw-semibold"><i class="bi bi-clipboard2-pulse me-2"></i>Treatment Records</span>
+                {% if user_is_dentist %}
                 <a href="{% url 'record_add' patient.pk %}" class="btn btn-sm btn-primary">
                     <i class="bi bi-plus-lg"></i> Add Record
                 </a>
+                {% endif %}
             </div>
             <div class="card-body p-0">
                 {% if patient.treatment_records.all %}
@@ -158,7 +208,7 @@
                                     <td>{{ rec.procedure }}</td>
                                     <td>{{ rec.tooth_number|default:"—" }}</td>
                                     <td>{{ rec.dentist.get_full_name|default:"—" }}</td>
-                                    <td><a href="{% url 'record_edit' rec.pk %}" class="btn btn-sm btn-outline-primary">Edit</a></td>
+                                    <td>{% if user_is_dentist %}<a href="{% url 'record_edit' rec.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>{% endif %}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -174,9 +224,11 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span class="fw-semibold"><i class="bi bi-list-check me-2"></i>Treatment Plans</span>
+                {% if user_is_dentist %}
                 <a href="{% url 'plan_add' patient.pk %}" class="btn btn-sm btn-primary">
                     <i class="bi bi-plus-lg"></i> New Plan
                 </a>
+                {% endif %}
             </div>
             <div class="card-body p-0">
                 {% if patient.treatment_plans.all %}

@@ -17,4 +17,5 @@ urlpatterns = [
     path('inventory/', include('inventory.urls')),
     path('account/', include('staff.urls')),
     path('reports/', views.reports, name='reports'),
+    path('patient/', include('patient_portal.urls')),
 ]

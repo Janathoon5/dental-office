@@ -1,5 +1,4 @@
 from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncMonth
@@ -8,9 +7,10 @@ import json
 from patients.models import Patient
 from appointments.models import Appointment
 from billing.models import Invoice
+from dental_office.roles import staff_required, dentist_required, is_dentist
 
 
-@login_required
+@staff_required
 def dashboard(request):
     today = timezone.localdate()
     todays_appointments = Appointment.objects.filter(
@@ -34,15 +34,20 @@ def dashboard(request):
     except Exception:
         pass
 
+    my_appointments_today = None
+    if is_dentist(request.user):
+        my_appointments_today = todays_appointments.filter(dentist=request.user).count()
+
     return render(request, 'dashboard.html', {
         'todays_appointments': todays_appointments,
         'today': today,
         'stats': stats,
         'pending_requests': pending_requests,
+        'my_appointments_today': my_appointments_today,
     })
 
 
-@login_required
+@dentist_required
 def reports(request):
     today = timezone.localdate()
     # Last 6 months of revenue

@@ -1,0 +1,81 @@
+{% extends "patient_portal/base.html" %}
+
+{% block title %}My Records — Dental Office{% endblock %}
+{% block page_title %}My Records{% endblock %}
+
+{% block content %}
+<h5 class="mb-4">My Treatment Records</h5>
+
+{% if treatment_plans %}
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-journal-medical me-1 text-primary"></i> Treatment Plans
+    </div>
+    <ul class="list-group list-group-flush">
+        {% for plan in treatment_plans %}
+        <li class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <span class="fw-semibold">{{ plan.title }}</span>
+                    <div class="text-muted small">Created {{ plan.created_date|date:"M j, Y" }}</div>
+                    {% if plan.notes %}<div class="text-muted small mt-1">{{ plan.notes }}</div>{% endif %}
+                    {% if plan.items.all %}
+                    <ul class="mt-2 mb-0 small ps-3">
+                        {% for item in plan.items.all %}
+                        <li class="{% if item.status == 'completed' %}text-muted text-decoration-line-through{% endif %}">
+                            {{ item.procedure }}
+                            {% if item.tooth_number %} — Tooth {{ item.tooth_number }}{% endif %}
+                            <span class="text-muted">${{ item.estimated_cost }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+                <span class="badge
+                    {% if plan.status == 'completed' %}bg-success
+                    {% elif plan.status == 'in_progress' %}bg-primary
+                    {% elif plan.status == 'accepted' %}bg-info
+                    {% else %}bg-secondary{% endif %}">
+                    {{ plan.get_status_display }}
+                </span>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-clipboard-pulse me-1 text-primary"></i> Treatment History
+    </div>
+    {% if treatment_records %}
+    <ul class="list-group list-group-flush">
+        {% for record in treatment_records %}
+        <li class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <span class="fw-semibold">{{ record.procedure }}</span>
+                    {% if record.tooth_number %}
+                        <span class="text-muted small ms-2">Tooth {{ record.tooth_number }}</span>
+                    {% endif %}
+                    {% if record.dentist %}
+                        <div class="text-muted small">Dr. {{ record.dentist.get_full_name|default:record.dentist.username }}</div>
+                    {% endif %}
+                    {% if record.notes %}
+                        <div class="text-muted small mt-1">{{ record.notes }}</div>
+                    {% endif %}
+                </div>
+                <span class="text-muted small text-nowrap ms-3">{{ record.date|date:"M j, Y" }}</span>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="card-body text-muted text-center py-4">
+        <i class="bi bi-clipboard fs-2 d-block mb-2"></i>
+        No treatment records yet.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "patient_portal/base.html" %}
+
+{% block title %}My Dashboard — Dental Office{% endblock %}
+{% block page_title %}My Dashboard{% endblock %}
+
+{% block content %}
+<h5 class="mb-4">Welcome back, {{ patient.first_name }}</h5>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-calendar-check fs-4 text-primary me-2"></i>
+                    <span class="fw-semibold">Next Appointment</span>
+                </div>
+                {% if next_appointment %}
+                    <p class="mb-1 fs-5">{{ next_appointment.date|date:"F j, Y" }} at {{ next_appointment.start_time|time:"g:i A" }}</p>
+                    <p class="text-muted mb-2">{{ next_appointment.get_appointment_type_display }}</p>
+                    {% if next_appointment.dentist %}
+                        <p class="text-muted small mb-0">with Dr. {{ next_appointment.dentist.get_full_name|default:next_appointment.dentist.username }}</p>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted mb-2">No upcoming appointments.</p>
+                    <a href="{% url 'patient_request_appointment' %}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-plus"></i> Request Appointment
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-receipt fs-4 text-warning me-2"></i>
+                    <span class="fw-semibold">Balance Due</span>
+                </div>
+                {% if total_balance > 0 %}
+                    <p class="fs-4 fw-bold text-danger mb-1">${{ total_balance|floatformat:2 }}</p>
+                    <a href="{% url 'patient_invoices' %}" class="btn btn-sm btn-outline-danger">View Invoices</a>
+                {% else %}
+                    <p class="fs-5 text-success mb-0"><i class="bi bi-check-circle me-1"></i> No balance due</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if recent_records %}
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-clipboard-pulse me-1"></i> Recent Treatment
+    </div>
+    <ul class="list-group list-group-flush">
+        {% for record in recent_records %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+                <span class="fw-semibold">{{ record.procedure }}</span>
+                {% if record.tooth_number %}<span class="text-muted small ms-2">Tooth {{ record.tooth_number }}</span>{% endif %}
+            </div>
+            <span class="text-muted small">{{ record.date|date:"M j, Y" }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    <div class="card-footer bg-white">
+        <a href="{% url 'patient_records' %}" class="btn btn-sm btn-outline-secondary">View All Records</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

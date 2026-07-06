@@ -1,0 +1,51 @@
+{% extends "patient_portal/base.html" %}
+
+{% block title %}{% if editing %}Edit Appointment Request{% else %}Request Appointment{% endif %} — Dental Office{% endblock %}
+{% block page_title %}{% if editing %}Edit Appointment Request{% else %}Request an Appointment{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7">
+
+        <div class="alert alert-info py-2 small mb-3">
+            <i class="bi bi-clock me-1"></i>
+            <strong>Office Hours:</strong>
+            Mon – Fri 8:00 AM – 5:00 PM &bull; Saturday 8:00 AM – 1:00 PM &bull; Sunday Closed
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-calendar-{% if editing %}check{% else %}plus{% endif %} me-1"></i>
+                {% if editing %}Update Your Request{% else %}Request an Appointment{% endif %}
+            </div>
+            <div class="card-body">
+                {% if editing %}
+                <p class="text-muted mb-3">Update the details below. Your request will stay pending until the office confirms.</p>
+                {% else %}
+                <p class="text-muted mb-3">Fill out your preferred time and we'll confirm your appointment as soon as possible.</p>
+                {% endif %}
+
+                <form method="post">
+                    {% csrf_token %}
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}
+                            <div class="text-danger small mt-1">{{ field.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            {% if editing %}Save Changes{% else %}Submit Request{% endif %}
+                        </button>
+                        <a href="{% url 'patient_appointments' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

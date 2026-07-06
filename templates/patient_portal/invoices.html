@@ -1,0 +1,74 @@
+{% extends "patient_portal/base.html" %}
+
+{% block title %}My Invoices — Dental Office{% endblock %}
+{% block page_title %}My Invoices{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="mb-0">My Invoices</h5>
+    {% if total_balance > 0 %}
+    <span class="fw-semibold text-danger">Total Balance Due: ${{ total_balance|floatformat:2 }}</span>
+    {% endif %}
+</div>
+
+{% if invoices %}
+{% for invoice in invoices %}
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Invoice #{{ invoice.pk }}</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">{{ invoice.date_issued|date:"M j, Y" }}</span>
+            <span class="badge
+                {% if invoice.status == 'paid' %}bg-success
+                {% elif invoice.status == 'partial' %}bg-warning text-dark
+                {% else %}bg-danger{% endif %}">
+                {{ invoice.get_status_display }}
+            </span>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row text-center">
+            <div class="col">
+                <div class="text-muted small">Total</div>
+                <div class="fw-semibold">${{ invoice.subtotal|floatformat:2 }}</div>
+            </div>
+            <div class="col">
+                <div class="text-muted small">Insurance Covers</div>
+                <div class="fw-semibold text-success">- ${{ invoice.insurance_amount|floatformat:2 }}</div>
+            </div>
+            <div class="col">
+                <div class="text-muted small">Your Portion</div>
+                <div class="fw-semibold">${{ invoice.patient_owes|floatformat:2 }}</div>
+            </div>
+            <div class="col">
+                <div class="text-muted small">Paid</div>
+                <div class="fw-semibold text-success">- ${{ invoice.amount_paid|floatformat:2 }}</div>
+            </div>
+            <div class="col">
+                <div class="text-muted small">Balance Due</div>
+                <div class="fw-bold {% if invoice.balance_due > 0 %}text-danger{% else %}text-success{% endif %}">
+                    ${{ invoice.balance_due|floatformat:2 }}
+                </div>
+            </div>
+        </div>
+        {% if invoice.notes %}
+        <p class="text-muted small mt-2 mb-0">{{ invoice.notes }}</p>
+        {% endif %}
+        {% if invoice.balance_due > 0 %}
+        <div class="mt-3 p-2 bg-light rounded small text-muted">
+            <i class="bi bi-telephone me-1"></i>
+            To make a payment, please call our office or visit us in person. Online payments coming soon.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-muted text-center py-4">
+        <i class="bi bi-receipt fs-2 d-block mb-2"></i>
+        No invoices on file.
+    </div>
+</div>
+{% endif %}
+{% endblock %}
