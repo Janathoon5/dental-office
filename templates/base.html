@@ -59,6 +59,23 @@
         .badge-completed { background-color: #198754; }
         .badge-cancelled { background-color: #6c757d; }
         .badge-no_show { background-color: #dc3545; }
+        .sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 98;
+        }
+        .sidebar-backdrop.show { display: block; }
+        @media (max-width: 767.98px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+            }
+            .sidebar.show { transform: translateX(0); }
+            .main-content { margin-left: 0; padding: 1rem; }
+            .topbar { margin-left: 0; padding: 0.75rem 1rem; }
+        }
     </style>
 </head>
 <body>
@@ -121,9 +138,16 @@
     </div>
 </div>
 
+<div class="sidebar-backdrop"></div>
+
 <div class="topbar">
-    <span class="fw-semibold text-muted">{% block page_title %}{% endblock %}</span>
-    <span class="text-muted small">{% now "l, F j, Y" %}</span>
+    <div class="d-flex align-items-center gap-2">
+        <button id="sidebarToggle" class="btn btn-sm btn-outline-secondary d-md-none" type="button" aria-label="Toggle menu">
+            <i class="bi bi-list"></i>
+        </button>
+        <span class="fw-semibold text-muted">{% block page_title %}{% endblock %}</span>
+    </div>
+    <span class="text-muted small d-none d-sm-inline">{% now "l, F j, Y" %}</span>
 </div>
 
 <div class="main-content">
@@ -140,5 +164,21 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const sidebar = document.querySelector('.sidebar');
+    const backdrop = document.querySelector('.sidebar-backdrop');
+    const toggleBtn = document.getElementById('sidebarToggle');
+    function closeSidebar() {
+        sidebar.classList.remove('show');
+        backdrop.classList.remove('show');
+    }
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('show');
+            backdrop.classList.toggle('show');
+        });
+    }
+    backdrop.addEventListener('click', closeSidebar);
+</script>
 </body>
 </html>
