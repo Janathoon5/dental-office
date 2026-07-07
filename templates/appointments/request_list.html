@@ -31,7 +31,7 @@
                         <td>{{ req.get_appointment_type_display }}</td>
                         <td><small>{{ req.message|default:"—"|truncatechars:60 }}</small></td>
                         <td>
-                            <span class="badge {% if req.status == 'approved' %}bg-success{% elif req.status == 'declined' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                            <span class="badge {% if req.status == 'approved' %}bg-success{% elif req.status == 'declined' %}bg-danger{% elif req.status == 'expired' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">
                                 {{ req.get_status_display }}
                             </span>
                         </td>

@@ -103,6 +103,7 @@ def appointment_request(request):
 
 @login_required
 def request_list(request):
+    AppointmentRequest.objects.expire_stale()
     requests = AppointmentRequest.objects.all()
     return render(request, 'appointments/request_list.html', {'requests': requests})
 

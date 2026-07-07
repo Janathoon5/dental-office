@@ -47,6 +47,7 @@ def patient_appointments(request):
         date__lt=today
     ).order_by('-date', '-start_time')[:10]
 
+    AppointmentRequest.objects.expire_stale()
     pending_requests = patient.appointment_requests.filter(status='pending')
 
     return render(request, 'patient_portal/appointments.html', {

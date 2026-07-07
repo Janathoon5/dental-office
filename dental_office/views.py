@@ -30,6 +30,7 @@ def dashboard(request):
     pending_requests = 0
     try:
         from appointments.models import AppointmentRequest
+        AppointmentRequest.objects.expire_stale()
         pending_requests = AppointmentRequest.objects.filter(status='pending').count()
     except Exception:
         pass

@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 from patients.models import Patient
 
 
@@ -37,12 +38,22 @@ class Appointment(models.Model):
         return f"{self.patient} — {self.date} {self.start_time}"
 
 
+class AppointmentRequestManager(models.Manager):
+    def expire_stale(self):
+        return self.filter(
+            status='pending', preferred_date__lt=timezone.localdate()
+        ).update(status='expired')
+
+
 class AppointmentRequest(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('approved', 'Approved'),
         ('declined', 'Declined'),
+        ('expired', 'Expired'),
     ]
+
+    objects = AppointmentRequestManager()
 
     patient = models.ForeignKey(
         'patients.Patient', on_delete=models.SET_NULL,

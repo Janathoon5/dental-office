@@ -12,6 +12,7 @@ def user_roles(request):
     if is_staff_member(request.user):
         try:
             from appointments.models import AppointmentRequest
+            AppointmentRequest.objects.expire_stale()
             pending_count = AppointmentRequest.objects.filter(status='pending').count()
         except Exception:
             pass
