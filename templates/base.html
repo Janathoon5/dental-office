@@ -133,7 +133,10 @@
             <span class="badge bg-secondary ms-1" style="font-size:0.65rem;">Receptionist</span>
             {% endif %}
             <br>
-            <a href="{% url 'logout' %}" class="text-white-50" style="font-size:0.8rem;">Logout</a>
+            <form method="post" action="{% url 'logout' %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-link text-white-50 p-0 border-0 align-baseline" style="font-size:0.8rem;">Logout</button>
+            </form>
         {% endif %}
     </div>
 </div>
