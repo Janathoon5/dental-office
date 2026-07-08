@@ -1,10 +1,11 @@
 from django.contrib import admin
+from dental_office.mixins import SoftDeleteAdminMixin
 from .models import Patient, MedicalAlert
 
 
 @admin.register(Patient)
-class PatientAdmin(admin.ModelAdmin):
-    list_display = ['last_name', 'first_name', 'date_of_birth', 'phone', 'email', 'insurance_provider']
+class PatientAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ['last_name', 'first_name', 'date_of_birth', 'phone', 'email', 'insurance_provider', 'is_active']
     search_fields = ['first_name', 'last_name', 'phone', 'email']
 
 

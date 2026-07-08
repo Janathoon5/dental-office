@@ -1,9 +1,10 @@
 from django.db import models
+from dental_office.mixins import SoftDeleteModel
 from patients.models import Patient
 from appointments.models import Appointment
 
 
-class Invoice(models.Model):
+class Invoice(SoftDeleteModel):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('partial', 'Partially Paid'),
@@ -18,7 +19,7 @@ class Invoice(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     notes = models.TextField(blank=True)
 
-    class Meta:
+    class Meta(SoftDeleteModel.Meta):
         ordering = ['-date_issued']
 
     def __str__(self):
@@ -34,7 +35,7 @@ class Invoice(models.Model):
         return self.patient_owes() - self.amount_paid()
 
 
-class Payment(models.Model):
+class Payment(SoftDeleteModel):
     METHOD_CHOICES = [
         ('cash', 'Cash'),
         ('card', 'Credit/Debit Card'),
@@ -47,6 +48,9 @@ class Payment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     method = models.CharField(max_length=20, choices=METHOD_CHOICES, default='card')
     notes = models.CharField(max_length=200, blank=True)
+
+    class Meta(SoftDeleteModel.Meta):
+        pass
 
     def __str__(self):
         return f"${self.amount} on Invoice #{self.invoice.pk}"

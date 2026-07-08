@@ -1,11 +1,12 @@
 from django.db import models
 from django.contrib.auth.models import User
 from encrypted_model_fields.fields import EncryptedTextField
+from dental_office.mixins import SoftDeleteModel
 from patients.models import Patient
 from appointments.models import Appointment
 
 
-class TreatmentRecord(models.Model):
+class TreatmentRecord(SoftDeleteModel):
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='treatment_records')
     appointment = models.OneToOneField(Appointment, on_delete=models.SET_NULL, null=True, blank=True, related_name='treatment_record')
     dentist = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='treatment_records')
@@ -15,14 +16,14 @@ class TreatmentRecord(models.Model):
     notes = EncryptedTextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
+    class Meta(SoftDeleteModel.Meta):
         ordering = ['-date']
 
     def __str__(self):
         return f"{self.patient} — {self.procedure} ({self.date})"
 
 
-class TreatmentPlan(models.Model):
+class TreatmentPlan(SoftDeleteModel):
     STATUS_CHOICES = [
         ('proposed', 'Proposed'),
         ('accepted', 'Accepted'),
@@ -36,7 +37,7 @@ class TreatmentPlan(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='proposed')
     notes = EncryptedTextField(blank=True)
 
-    class Meta:
+    class Meta(SoftDeleteModel.Meta):
         ordering = ['-created_date']
 
     def __str__(self):

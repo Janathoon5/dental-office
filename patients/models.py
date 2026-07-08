@@ -1,9 +1,10 @@
 from django.db import models
 from django.contrib.auth.models import User
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
+from dental_office.mixins import SoftDeleteModel
 
 
-class Patient(models.Model):
+class Patient(SoftDeleteModel):
     user = models.OneToOneField(
         User, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='patient_profile'
@@ -20,7 +21,7 @@ class Patient(models.Model):
     medical_notes = EncryptedTextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
+    class Meta(SoftDeleteModel.Meta):
         ordering = ['last_name', 'first_name']
 
     def __str__(self):
