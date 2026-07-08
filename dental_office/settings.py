@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'billing',
     'inventory',
     'patient_portal',
+    'anymail',
 ]
 
 # Email — prints to console in development; swap for real SMTP in production
@@ -144,18 +145,14 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
-# Email — set EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend in production
+# Email — prints to console by default; set EMAIL_BACKEND to Anymail's Resend
+# backend in production. Railway (like many PaaS hosts) blocks outbound SMTP
+# ports entirely, so Resend is used via its HTTP API instead of SMTP.
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = config('EMAIL_HOST', default='')
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@dentaloffice.com')
-# Without this, a stalled SMTP connection hangs indefinitely and takes down
-# the whole gunicorn worker (WORKER TIMEOUT) instead of failing with a
-# readable error.
-EMAIL_TIMEOUT = config('EMAIL_TIMEOUT', default=10, cast=int)
+ANYMAIL = {
+    'RESEND_API_KEY': config('RESEND_API_KEY', default=''),
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
