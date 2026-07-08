@@ -54,7 +54,6 @@ class Command(BaseCommand):
                 f"This is a reminder for your upcoming appointment:\n\n"
                 f"  Date:  {appt.date.strftime('%A, %B %d, %Y')}\n"
                 f"  Time:  {appt.start_time.strftime('%I:%M %p').lstrip('0')}\n"
-                f"  Type:  {appt.get_appointment_type_display()}\n"
             )
             if appt.dentist:
                 message += f"  Provider: {appt.dentist.get_full_name()}\n"

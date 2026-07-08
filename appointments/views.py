@@ -4,8 +4,6 @@ from django.core.management import call_command
 from django.utils import timezone
 import datetime
 import io
-import sys
-from pathlib import Path
 from dental_office.roles import staff_required
 from .models import Appointment, AppointmentRequest, ReminderLog
 from .forms import AppointmentForm, AppointmentRequestForm
@@ -147,8 +145,6 @@ def reminders_dashboard(request):
         'upcoming': upcoming,
         'recent_logs': recent_logs,
         'today': today,
-        'python_path': sys.executable,
-        'project_path': str(Path(sys.executable).parent.parent),
     })
 
 
