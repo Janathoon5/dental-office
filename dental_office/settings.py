@@ -23,6 +23,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('SECRET_KEY')
 
+# Encrypts PHI fields at rest (medical notes, allergies, insurance info — see
+# patients/models.py and clinical/models.py). Losing this key permanently
+# loses everything encrypted with it — there is no recovery. Keep a secure,
+# durable backup outside of Railway's env var UI.
+FIELD_ENCRYPTION_KEY = config('FIELD_ENCRYPTION_KEY')
+
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())

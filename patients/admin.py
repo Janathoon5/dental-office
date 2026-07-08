@@ -6,7 +6,6 @@ from .models import Patient, MedicalAlert
 class PatientAdmin(admin.ModelAdmin):
     list_display = ['last_name', 'first_name', 'date_of_birth', 'phone', 'email', 'insurance_provider']
     search_fields = ['first_name', 'last_name', 'phone', 'email']
-    list_filter = ['insurance_provider']
 
 
 @admin.register(MedicalAlert)
