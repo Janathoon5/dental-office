@@ -7,7 +7,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import TOTPDevice
-from dental_office.roles import get_post_login_redirect
+from dental_office.roles import get_post_login_redirect, is_staff_member
 
 
 def login_view(request):
@@ -40,6 +40,9 @@ def login_view(request):
     return render(request, 'registration/login.html')
 
 
+OTP_ATTEMPT_LIMIT = 5
+
+
 def verify_otp(request):
     user_id = request.session.get('pending_2fa_user')
     if not user_id:
@@ -58,9 +61,18 @@ def verify_otp(request):
         totp = pyotp.TOTP(device.secret)
         if totp.verify(otp, valid_window=1):
             del request.session['pending_2fa_user']
+            request.session.pop('otp_attempts', None)
+            user.backend = 'dental_office.backends.CaseInsensitiveModelBackend'
             login(request, user)
             return redirect(get_post_login_redirect(user))
         else:
+            attempts = request.session.get('otp_attempts', 0) + 1
+            request.session['otp_attempts'] = attempts
+            if attempts >= OTP_ATTEMPT_LIMIT:
+                del request.session['pending_2fa_user']
+                request.session.pop('otp_attempts', None)
+                messages.error(request, 'Too many incorrect codes. Please log in again.')
+                return redirect('login')
             messages.error(request, 'Invalid code. Please try again.')
 
     return render(request, 'registration/verify_otp.html')
@@ -111,6 +123,9 @@ def setup_2fa(request):
 
 @login_required
 def disable_2fa(request):
+    if is_staff_member(request.user):
+        messages.error(request, '2FA is required for staff accounts and cannot be disabled.')
+        return redirect('dashboard')
     if request.method == 'POST':
         try:
             request.user.totp_device.delete()

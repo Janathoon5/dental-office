@@ -29,6 +29,18 @@ def get_post_login_redirect(user):
     return 'dashboard'
 
 
+def _require_2fa(user):
+    """Staff accounts must have confirmed 2FA. Returns a redirect if not set
+    up yet, or None if the user is clear to proceed."""
+    from staff.models import TOTPDevice
+    try:
+        if not user.totp_device.confirmed:
+            return redirect('setup_2fa')
+    except TOTPDevice.DoesNotExist:
+        return redirect('setup_2fa')
+    return None
+
+
 def patient_required(view_func):
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
@@ -47,6 +59,9 @@ def staff_required(view_func):
             return redirect('login')
         if not is_staff_member(request.user):
             return redirect('patient_dashboard')
+        needs_2fa = _require_2fa(request.user)
+        if needs_2fa:
+            return needs_2fa
         return view_func(request, *args, **kwargs)
     return wrapper
 
@@ -58,5 +73,8 @@ def dentist_required(view_func):
             return redirect('login')
         if not (request.user.is_superuser or is_dentist(request.user)):
             return redirect('dashboard')
+        needs_2fa = _require_2fa(request.user)
+        if needs_2fa:
+            return needs_2fa
         return view_func(request, *args, **kwargs)
     return wrapper

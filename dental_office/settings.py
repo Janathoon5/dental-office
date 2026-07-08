@@ -59,11 +59,8 @@ INSTALLED_APPS = [
     'inventory',
     'patient_portal',
     'anymail',
+    'axes',
 ]
-
-# Email — prints to console in development; swap for real SMTP in production
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'Dental Office <noreply@dentaloffice.local>'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -72,6 +69,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'axes.middleware.AxesMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -152,7 +150,18 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
-AUTHENTICATION_BACKENDS = ['dental_office.backends.CaseInsensitiveModelBackend']
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',
+    'dental_office.backends.CaseInsensitiveModelBackend',
+]
+
+# django-axes: lock out after repeated failed logins. Keyed on (IP, username)
+# together — locking on username alone lets an attacker bypass the limit by
+# rotating cookies/user-agents; locking on IP alone could lock out an entire
+# shared office network for one bad login.
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 1  # hours
+AXES_LOCKOUT_PARAMETERS = [['ip_address', 'username']]
 
 # Email — prints to console by default; set EMAIL_BACKEND to Anymail's Resend
 # backend in production. Railway (like many PaaS hosts) blocks outbound SMTP

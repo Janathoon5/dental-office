@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from patients.models import Patient
-from staff.models import StaffProfile
+from staff.models import StaffProfile, TOTPDevice
 from .models import Appointment, AppointmentRequest
 
 
@@ -34,6 +34,7 @@ class AppointmentAccessControlTests(TestCase):
 
         self.staff_user = User.objects.create_user(username='staffuser', password='testpass123')
         StaffProfile.objects.create(user=self.staff_user, role='dentist')
+        TOTPDevice.objects.create(user=self.staff_user, secret='JBSWY3DPEHPK3PXP', confirmed=True)
 
     def _get_urls(self):
         return [
@@ -49,7 +50,7 @@ class AppointmentAccessControlTests(TestCase):
         ]
 
     def test_patient_account_is_blocked_from_every_staff_view(self):
-        self.client.login(username='patientuser', password='testpass123')
+        self.client.force_login(self.patient_user)
         for url in self._get_urls():
             response = self.client.get(url)
             self.assertEqual(
@@ -58,7 +59,7 @@ class AppointmentAccessControlTests(TestCase):
             )
 
     def test_staff_account_can_reach_get_views(self):
-        self.client.login(username='staffuser', password='testpass123')
+        self.client.force_login(self.staff_user)
         for url in (reverse('appointment_list'), reverse('appointment_detail', args=[self.appointment.pk]),
                     reverse('appointment_add'), reverse('appointment_edit', args=[self.appointment.pk]),
                     reverse('request_list'), reverse('reminders_dashboard')):
