@@ -1,5 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
+from auditlog.signals import accessed
 from dental_office.roles import dentist_required, staff_required
 from patients.models import Patient
 from appointments.models import Appointment
@@ -69,6 +70,7 @@ def plan_add(request, patient_pk):
 @staff_required
 def plan_detail(request, pk):
     plan = get_object_or_404(TreatmentPlan, pk=pk)
+    accessed.send(sender=TreatmentPlan, instance=plan)
     item_form = TreatmentPlanItemForm()
     if request.method == 'POST':
         item_form = TreatmentPlanItemForm(request.POST)

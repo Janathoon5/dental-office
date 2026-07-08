@@ -1,5 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
+from auditlog.signals import accessed
 from dental_office.roles import staff_required
 from patients.models import Patient
 from appointments.models import Appointment
@@ -22,6 +23,7 @@ def invoice_list(request):
 @staff_required
 def invoice_detail(request, pk):
     invoice = get_object_or_404(Invoice, pk=pk)
+    accessed.send(sender=Invoice, instance=invoice)
     payment_form = PaymentForm()
     return render(request, 'billing/invoice_detail.html', {
         'invoice': invoice,

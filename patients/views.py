@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.urls import reverse
 from django.core.mail import send_mail
 from django.db.models import Q
+from auditlog.signals import accessed
 from dental_office.roles import staff_required
 from .models import Patient, MedicalAlert
 from .forms import PatientForm, MedicalAlertForm
@@ -24,6 +25,7 @@ def patient_list(request):
 @staff_required
 def patient_detail(request, pk):
     patient = get_object_or_404(Patient, pk=pk)
+    accessed.send(sender=Patient, instance=patient)
     appointments = patient.appointments.order_by('-date', '-start_time')
     alert_form = MedicalAlertForm()
     patient_has_portal = bool(
