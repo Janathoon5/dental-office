@@ -87,6 +87,7 @@ def send_patient_invite(request, pk):
             f'Hello {patient.first_name},\n\n'
             f'You have been invited to access your patient portal. '
             f'Use it to view your appointments, treatment records, and invoices online.\n\n'
+            f'Your username is: {patient.user.username}\n\n'
             f'Set your password here:\n{invite_url}\n\n'
             f'This link expires in 7 days. If you did not expect this email, you can ignore it.\n'
         ),
