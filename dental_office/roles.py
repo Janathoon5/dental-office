@@ -15,7 +15,7 @@ def is_receptionist(user):
 
 
 def is_staff_member(user):
-    return user.is_staff or is_dentist(user) or is_receptionist(user)
+    return user.is_staff or hasattr(user, 'staff_profile')
 
 
 def get_post_login_redirect(user):

@@ -1,5 +1,4 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.management import call_command
 from django.utils import timezone
@@ -7,11 +6,12 @@ import datetime
 import io
 import sys
 from pathlib import Path
+from dental_office.roles import staff_required
 from .models import Appointment, AppointmentRequest, ReminderLog
 from .forms import AppointmentForm, AppointmentRequestForm
 
 
-@login_required
+@staff_required
 def appointment_list(request):
     date_str = request.GET.get('date')
     if date_str:
@@ -34,13 +34,13 @@ def appointment_list(request):
     })
 
 
-@login_required
+@staff_required
 def appointment_detail(request, pk):
     appointment = get_object_or_404(Appointment, pk=pk)
     return render(request, 'appointments/appointment_detail.html', {'appointment': appointment})
 
 
-@login_required
+@staff_required
 def appointment_add(request):
     initial = {}
     patient_id = request.GET.get('patient')
@@ -60,7 +60,7 @@ def appointment_add(request):
     return render(request, 'appointments/appointment_form.html', {'form': form, 'title': 'Book Appointment'})
 
 
-@login_required
+@staff_required
 def appointment_edit(request, pk):
     appointment = get_object_or_404(Appointment, pk=pk)
     if request.method == 'POST':
@@ -77,7 +77,7 @@ def appointment_edit(request, pk):
     })
 
 
-@login_required
+@staff_required
 def appointment_cancel(request, pk):
     appointment = get_object_or_404(Appointment, pk=pk)
     if request.method == 'POST':
@@ -101,14 +101,14 @@ def appointment_request(request):
     })
 
 
-@login_required
+@staff_required
 def request_list(request):
     AppointmentRequest.objects.expire_stale()
     requests = AppointmentRequest.objects.all()
     return render(request, 'appointments/request_list.html', {'requests': requests})
 
 
-@login_required
+@staff_required
 def request_update(request, pk):
     appt_request = get_object_or_404(AppointmentRequest, pk=pk)
     if request.method == 'POST':
@@ -119,7 +119,7 @@ def request_update(request, pk):
     return redirect('request_list')
 
 
-@login_required
+@staff_required
 def reminders_dashboard(request):
     today = timezone.localdate()
 
@@ -152,7 +152,7 @@ def reminders_dashboard(request):
     })
 
 
-@login_required
+@staff_required
 def send_reminders_now(request):
     if request.method == 'POST':
         days = int(request.POST.get('days', 1))

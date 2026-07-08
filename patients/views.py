@@ -1,5 +1,4 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.urls import reverse
 from django.core.mail import send_mail
@@ -9,7 +8,7 @@ from .models import Patient, MedicalAlert
 from .forms import PatientForm, MedicalAlertForm
 
 
-@login_required
+@staff_required
 def patient_list(request):
     query = request.GET.get('q', '')
     patients = Patient.objects.all()
@@ -22,7 +21,7 @@ def patient_list(request):
     return render(request, 'patients/patient_list.html', {'patients': patients, 'query': query})
 
 
-@login_required
+@staff_required
 def patient_detail(request, pk):
     patient = get_object_or_404(Patient, pk=pk)
     appointments = patient.appointments.order_by('-date', '-start_time')
@@ -99,7 +98,7 @@ def send_patient_invite(request, pk):
     return redirect('patient_detail', pk=pk)
 
 
-@login_required
+@staff_required
 def alert_add(request, patient_pk):
     patient = get_object_or_404(Patient, pk=patient_pk)
     if request.method == 'POST':
@@ -111,7 +110,7 @@ def alert_add(request, patient_pk):
     return redirect('patient_detail', pk=patient_pk)
 
 
-@login_required
+@staff_required
 def alert_delete(request, pk):
     alert = get_object_or_404(MedicalAlert, pk=pk)
     patient_pk = alert.patient.pk
@@ -120,7 +119,7 @@ def alert_delete(request, pk):
     return redirect('patient_detail', pk=patient_pk)
 
 
-@login_required
+@staff_required
 def patient_add(request):
     if request.method == 'POST':
         form = PatientForm(request.POST)
@@ -132,7 +131,7 @@ def patient_add(request):
     return render(request, 'patients/patient_form.html', {'form': form, 'title': 'Add Patient'})
 
 
-@login_required
+@staff_required
 def patient_edit(request, pk):
     patient = get_object_or_404(Patient, pk=pk)
     if request.method == 'POST':

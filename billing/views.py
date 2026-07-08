@@ -1,13 +1,13 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
 from django.utils import timezone
+from dental_office.roles import staff_required
 from patients.models import Patient
 from appointments.models import Appointment
 from .models import Invoice, Payment
 from .forms import InvoiceForm, PaymentForm
 
 
-@login_required
+@staff_required
 def invoice_list(request):
     status = request.GET.get('status', '')
     invoices = Invoice.objects.select_related('patient', 'appointment')
@@ -19,7 +19,7 @@ def invoice_list(request):
     })
 
 
-@login_required
+@staff_required
 def invoice_detail(request, pk):
     invoice = get_object_or_404(Invoice, pk=pk)
     payment_form = PaymentForm()
@@ -29,7 +29,7 @@ def invoice_detail(request, pk):
     })
 
 
-@login_required
+@staff_required
 def invoice_add(request):
     initial = {}
     appt_pk = request.GET.get('appointment')
@@ -51,7 +51,7 @@ def invoice_add(request):
     return render(request, 'billing/invoice_form.html', {'form': form, 'title': 'New Invoice'})
 
 
-@login_required
+@staff_required
 def invoice_edit(request, pk):
     invoice = get_object_or_404(Invoice, pk=pk)
     if request.method == 'POST':
@@ -64,7 +64,7 @@ def invoice_edit(request, pk):
     return render(request, 'billing/invoice_form.html', {'form': form, 'title': 'Edit Invoice', 'invoice': invoice})
 
 
-@login_required
+@staff_required
 def payment_add(request, invoice_pk):
     invoice = get_object_or_404(Invoice, pk=invoice_pk)
     if request.method == 'POST':
