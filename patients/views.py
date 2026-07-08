@@ -59,7 +59,7 @@ def send_patient_invite(request, pk):
     from django.contrib.auth.models import User
     if not patient.user:
         username = patient.email
-        if User.objects.filter(username=username).exists():
+        if User.objects.filter(username__iexact=username).exists():
             username = f'patient_{patient.pk}'
         user = User.objects.create(
             username=username,

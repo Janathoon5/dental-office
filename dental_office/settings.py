@@ -146,6 +146,8 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 
+AUTHENTICATION_BACKENDS = ['dental_office.backends.CaseInsensitiveModelBackend']
+
 # Email — prints to console by default; set EMAIL_BACKEND to Anymail's Resend
 # backend in production. Railway (like many PaaS hosts) blocks outbound SMTP
 # ports entirely, so Resend is used via its HTTP API instead of SMTP.
