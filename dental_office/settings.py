@@ -38,6 +38,7 @@ CSRF_COOKIE_SECURE = not DEBUG
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -158,3 +159,48 @@ ANYMAIL = {
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Admin theme (django-jazzmin)
+JAZZMIN_SETTINGS = {
+    "site_title": "Dental Office Admin",
+    "site_header": "Dental Office",
+    "site_brand": "Dental Office",
+    "welcome_sign": "Welcome to the Dental Office admin",
+    "copyright": "Dental Office",
+    "search_model": ["patients.Patient", "appointments.Appointment"],
+    "topmenu_links": [
+        {"name": "Back to Site", "url": "/", "permissions": []},
+    ],
+    "icons": {
+        "auth": "fas fa-users-cog",
+        "auth.User": "fas fa-user",
+        "auth.Group": "fas fa-users",
+        "patients.Patient": "fas fa-tooth",
+        "patients.MedicalAlert": "fas fa-exclamation-triangle",
+        "appointments.Appointment": "fas fa-calendar-check",
+        "appointments.AppointmentRequest": "fas fa-inbox",
+        "appointments.ReminderLog": "fas fa-bell",
+        "staff.StaffProfile": "fas fa-id-badge",
+        "staff.TOTPDevice": "fas fa-shield-alt",
+        "clinical.TreatmentRecord": "fas fa-notes-medical",
+        "clinical.TreatmentPlan": "fas fa-clipboard-list",
+        "billing.Invoice": "fas fa-file-invoice-dollar",
+        "billing.Payment": "fas fa-money-bill-wave",
+        "inventory.SupplyItem": "fas fa-box",
+        "patient_portal.PatientInvite": "fas fa-envelope-open-text",
+    },
+    "default_icon_parents": "fas fa-chevron-circle-right",
+    "default_icon_children": "fas fa-circle",
+    "show_ui_builder": False,
+}
+
+JAZZMIN_UI_TWEAKS = {
+    "navbar": "navbar-dark",
+    "no_navbar_border": True,
+    "navbar_fixed": True,
+    "sidebar": "sidebar-dark-primary",
+    "sidebar_fixed": True,
+    "accent": "accent-primary",
+    "theme": "flatly",
+    "dark_mode_theme": None,
+}
