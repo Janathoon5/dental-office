@@ -1,0 +1,18 @@
+gradle-wrapper.jar
+/.gradle
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+# Some diagnostics (e.g. AGP's problems-report.html) still land in each
+# module's conventional build/ dir even though the real build output is
+# redirected to the repo root (see ../../build.gradle.kts).
+**/build/
+
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+**/*.jks

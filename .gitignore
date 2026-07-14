@@ -32,3 +32,7 @@ staticfiles/
 # OS
 .DS_Store
 Thumbs.db
+
+# mobile_app/android/build.gradle.kts redirects Gradle's build output here
+# (../../build relative to mobile_app/android)
+/build/

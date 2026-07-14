@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+import sys
 from datetime import timedelta
 from pathlib import Path
 import dj_database_url
@@ -68,6 +69,7 @@ INSTALLED_APPS = [
     'anymail',
     'axes',
     'auditlog',
+    'django_ratelimit',
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'api',
@@ -174,6 +176,20 @@ AUTHENTICATION_BACKENDS = [
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1  # hours
 AXES_LOCKOUT_PARAMETERS = [['ip_address', 'username']]
+
+# django-ratelimit flags the default LocMemCache as "not a shared cache",
+# which matters for multi-worker/multi-dyno deployments (each process would
+# rate-limit independently). Gunicorn here runs a single worker (see
+# Procfile — no --workers flag), so LocMemCache genuinely is shared across
+# every request this app serves. Revisit this (add Redis, stop silencing)
+# if the Procfile ever adds multiple workers.
+SILENCED_SYSTEM_CHECKS = ['django_ratelimit.E003']
+
+# The test suite's cumulative login calls across many test classes exceed
+# the login endpoint's rate limit within a single test run; this is
+# django-ratelimit's own documented way to disable limiting under `manage.py
+# test` without weakening it in production.
+RATELIMIT_ENABLE = 'test' not in sys.argv
 
 # Mobile app API (JWT-authenticated, separate from the session-based web app —
 # existing web views are untouched by this).
