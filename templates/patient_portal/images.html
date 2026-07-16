@@ -1,0 +1,65 @@
+{% extends "patient_portal/base.html" %}
+
+{% block title %}My X-Rays & Photos — Dental Office{% endblock %}
+{% block page_title %}My X-Rays & Photos{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-upload me-1 text-primary"></i> Upload a Photo
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">
+                    Share a photo of a tooth or issue so your dentist can take a look before your visit.
+                </p>
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Photo</label>
+                        {{ form.image }}
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Date Taken</label>
+                        {{ form.captured_date }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Notes (optional)</label>
+                        {{ form.caption }}
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-lg me-1"></i>Upload
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-images me-1 text-primary"></i> My Photos
+            </div>
+            <div class="card-body">
+                {% if images %}
+                <div class="row g-3">
+                    {% for image in images %}
+                    <div class="col-6 col-md-4">
+                        <img src="{{ image.image.url }}" class="img-fluid rounded border" alt="Photo">
+                        <div class="small text-muted mt-1">{{ image.captured_date|date:"M j, Y" }}</div>
+                        {% if image.caption %}<div class="small">{{ image.caption }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-camera fs-2 d-block mb-2"></i>
+                    You haven't uploaded any photos yet.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

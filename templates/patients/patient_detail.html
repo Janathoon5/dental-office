@@ -149,6 +149,21 @@
     </div>
 
     <div class="col-lg-8">
+        <!-- X-Rays & Photos -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-x-diamond me-2"></i>X-Rays & Photos</span>
+                <a href="{% url 'staff_image_list' patient.pk %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-images me-1"></i>View / Upload
+                </a>
+            </div>
+            <div class="card-body py-2">
+                <p class="text-muted small mb-0">
+                    {{ patient.dental_images.count }} image{{ patient.dental_images.count|pluralize }} on file.
+                </p>
+            </div>
+        </div>
+
         <!-- Messages -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">

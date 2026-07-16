@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}{{ image.get_image_type_display }} — {{ image.patient.full_name }}{% endblock %}
+{% block page_title %}{{ image.get_image_type_display }}: {{ image.patient.full_name }}{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card mb-3">
+            <div class="card-body text-center">
+                <img src="{{ image.image.url }}" class="img-fluid rounded border" alt="{{ image.get_image_type_display }}">
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card mb-3">
+            <div class="card-header fw-semibold"><i class="bi bi-info-circle me-2"></i>Details</div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-5 text-muted">Type</dt>
+                    <dd class="col-7">{{ image.get_image_type_display }}</dd>
+                    <dt class="col-5 text-muted">Date Taken</dt>
+                    <dd class="col-7">{{ image.captured_date|date:"M j, Y" }}</dd>
+                    <dt class="col-5 text-muted">Tooth #</dt>
+                    <dd class="col-7">{{ image.tooth_number|default:"—" }}</dd>
+                    <dt class="col-5 text-muted">Uploaded By</dt>
+                    <dd class="col-7">
+                        {% if image.uploaded_by_patient %}{{ image.patient.first_name }} (patient){% else %}{{ image.uploaded_by.get_full_name|default:"Staff" }}{% endif %}
+                    </dd>
+                    {% if image.caption %}
+                    <dt class="col-5 text-muted">Caption</dt>
+                    <dd class="col-7">{{ image.caption|linebreaksbr }}</dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+
+        {% if previous_image %}
+        <div class="card mb-3">
+            <div class="card-header fw-semibold"><i class="bi bi-arrow-left-right me-2"></i>Compare</div>
+            <div class="card-body">
+                <a href="{% url 'staff_image_detail' previous_image.pk %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>Previous {{ image.get_image_type_display }} ({{ previous_image.captured_date|date:"M j, Y" }})
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        <a href="{% url 'staff_image_list' image.patient.pk %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Back to gallery
+        </a>
+        <form method="post" action="{% url 'staff_image_delete' image.pk %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Remove this image?')">
+                <i class="bi bi-trash me-1"></i>Delete
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

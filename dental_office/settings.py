@@ -37,6 +37,21 @@ FIELD_ENCRYPTION_KEY = config('FIELD_ENCRYPTION_KEY')
 # rather than erroring (e.g. a fresh clone without the key configured yet).
 FIREBASE_SERVICE_ACCOUNT_PATH = config('FIREBASE_SERVICE_ACCOUNT_PATH', default='')
 
+# S3 storage for dental X-rays/photos (imaging app). Leave AWS_STORAGE_BUCKET_NAME
+# unset locally to store uploads on local disk instead. Required in production.
+# The bucket must have SSE (server-side encryption) enabled and public access
+# blocked — images are only ever served via short-lived signed URLs (see
+# AWS_QUERYSTRING_AUTH below).
+AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default='')
+AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default='')
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default='')
+AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+AWS_S3_SIGNATURE_VERSION = 's3v4'
+AWS_DEFAULT_ACL = None            # bucket/objects stay private
+AWS_QUERYSTRING_AUTH = True        # image.url is always a freshly signed, time-limited GET
+AWS_QUERYSTRING_EXPIRE = 300       # signed URL lifetime, in seconds
+AWS_S3_FILE_OVERWRITE = False
+
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
@@ -73,6 +88,7 @@ INSTALLED_APPS = [
     'inventory',
     'patient_portal',
     'messaging',
+    'imaging',
     'anymail',
     'axes',
     'auditlog',
@@ -80,6 +96,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'api',
+    'storages',
 ]
 
 MIDDLEWARE = [
@@ -165,7 +182,23 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Media (patient-uploaded images). Never use S3 under the test runner, even if
+# real AWS credentials happen to be present in a developer's .env — mirrors
+# the same 'test' in sys.argv guard used for Firebase in messaging/push.py.
+_USE_S3 = bool(AWS_STORAGE_BUCKET_NAME) and 'test' not in sys.argv
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'storages.backends.s3.S3Storage' if _USE_S3
+                    else 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'   # only used by the FileSystemStorage fallback above
 
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
@@ -262,6 +295,7 @@ JAZZMIN_SETTINGS = {
         "billing.Payment": "fas fa-money-bill-wave",
         "inventory.SupplyItem": "fas fa-box",
         "patient_portal.PatientInvite": "fas fa-envelope-open-text",
+        "imaging.DentalImage": "fas fa-x-ray",
     },
     "default_icon_parents": "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",

@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}X-Rays & Photos — {{ patient.full_name }}{% endblock %}
+{% block page_title %}X-Rays & Photos: {{ patient.full_name }}{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header fw-semibold"><i class="bi bi-upload me-2"></i>Upload Image</div>
+            <div class="card-body">
+                <form method="post" action="{% url 'staff_image_upload' patient.pk %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Type</label>
+                        {{ form.image_type }}
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Image</label>
+                        {{ form.image }}
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Date Taken</label>
+                        {{ form.captured_date }}
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Tooth # (optional)</label>
+                        {{ form.tooth_number }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Caption (optional)</label>
+                        {{ form.caption }}
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-lg me-1"></i>Upload
+                    </button>
+                </form>
+            </div>
+        </div>
+        <a href="{% url 'patient_detail' patient.pk %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Back to {{ patient.first_name }}'s record
+        </a>
+    </div>
+
+    <div class="col-lg-8">
+        {% regroup images by get_image_type_display as image_groups %}
+        {% if image_groups %}
+            {% for group in image_groups %}
+            <div class="card mb-4">
+                <div class="card-header fw-semibold"><i class="bi bi-images me-2"></i>{{ group.grouper }}s</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        {% for image in group.list %}
+                        <div class="col-6 col-md-4">
+                            <a href="{% url 'staff_image_detail' image.pk %}" class="text-decoration-none">
+                                <img src="{{ image.image.url }}" class="img-fluid rounded border" alt="{{ image.get_image_type_display }}">
+                                <div class="small text-muted mt-1">{{ image.captured_date|date:"M j, Y" }}</div>
+                            </a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="card">
+                <div class="card-body text-center py-5 text-muted">
+                    No X-rays or photos on file yet.
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -89,6 +89,9 @@
         <a href="{% url 'patient_records' %}" class="nav-link {% if request.resolver_match.url_name == 'patient_records' %}active{% endif %}">
             <i class="bi bi-clipboard-pulse"></i> My Records
         </a>
+        <a href="{% url 'patient_images' %}" class="nav-link {% if request.resolver_match.url_name == 'patient_images' %}active{% endif %}">
+            <i class="bi bi-images"></i> My X-Rays & Photos
+        </a>
         <a href="{% url 'patient_invoices' %}" class="nav-link {% if request.resolver_match.url_name == 'patient_invoices' %}active{% endif %}">
             <i class="bi bi-receipt"></i> My Invoices
         </a>

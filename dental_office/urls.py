@@ -19,5 +19,6 @@ urlpatterns = [
     path('reports/', views.reports, name='reports'),
     path('patient/', include('patient_portal.urls')),
     path('messaging/', include('messaging.urls')),
+    path('imaging/', include('imaging.urls')),
     path('api/v1/', include('api.urls')),
 ]

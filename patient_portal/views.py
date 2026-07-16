@@ -7,6 +7,7 @@ from dental_office.roles import patient_required
 from appointments.models import Appointment, AppointmentRequest
 from billing.models import Invoice
 from clinical.models import TreatmentRecord, TreatmentPlan
+from imaging.forms import PatientImageUploadForm
 from .forms import AppointmentRequestForm, PatientProfileForm, InviteSetPasswordForm
 from .models import PatientInvite
 
@@ -144,6 +145,33 @@ def patient_invoices(request):
         'patient': patient,
         'invoices': invoices,
         'total_balance': total_balance,
+    })
+
+
+@patient_required
+def patient_images(request):
+    patient = request.user.patient_profile
+
+    if request.method == 'POST':
+        form = PatientImageUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            image = form.save(commit=False)
+            image.patient = patient
+            image.image_type = 'photo'
+            image.uploaded_by = request.user
+            image.uploaded_by_patient = True
+            image.save()
+            messages.success(request, 'Your photo has been uploaded.')
+            return redirect('patient_images')
+    else:
+        form = PatientImageUploadForm()
+
+    images = patient.dental_images.order_by('-captured_date')
+
+    return render(request, 'patient_portal/images.html', {
+        'patient': patient,
+        'images': images,
+        'form': form,
     })
 
 
