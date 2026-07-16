@@ -21,6 +21,10 @@ staticfiles/
 .env.*
 !.env.example
 
+# Firebase service account key — grants server-side push-notification access
+# to the Firebase project, never commit this.
+firebase-service-account.json
+
 # Editor
 .vscode/
 .idea/

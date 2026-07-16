@@ -28,7 +28,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     return _AppointmentsData(upcoming: upcoming, past: past, pendingRequests: pendingRequests);
   }
 
-  void _refresh() => setState(() => _future = _load());
+  void _refresh() => setState(() {
+        _future = _load();
+      });
 
   Future<void> _openRequestForm({Map<String, dynamic>? existing}) async {
     final changed = await Navigator.of(context).push<bool>(

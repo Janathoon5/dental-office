@@ -33,11 +33,14 @@ def patient_detail(request, pk):
         patient.user.is_active and
         patient.user.groups.filter(name='Patient').exists()
     )
+    conversation = getattr(patient, 'conversation', None)
+    patient_messages = conversation.messages.order_by('sent_at') if conversation else []
     return render(request, 'patients/patient_detail.html', {
         'patient': patient,
         'appointments': appointments,
         'alert_form': alert_form,
         'patient_has_portal': patient_has_portal,
+        'patient_messages': patient_messages,
     })
 
 

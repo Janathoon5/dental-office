@@ -44,6 +44,7 @@ class PatientAccessControlTests(TestCase):
             reverse('send_patient_invite', args=[self.other_patient.pk]),
             reverse('alert_add', args=[self.other_patient.pk]),
             reverse('alert_delete', args=[self.alert.pk]),
+            reverse('staff_send_message', args=[self.other_patient.pk]),
         ]
 
     def test_patient_account_is_blocked_from_every_staff_view(self):

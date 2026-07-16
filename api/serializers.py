@@ -9,6 +9,7 @@ from dental_office.roles import is_patient
 from appointments.models import Appointment, AppointmentRequest
 from billing.models import Invoice
 from clinical.models import TreatmentRecord, TreatmentPlan, TreatmentPlanItem
+from messaging.models import DeviceToken, Message
 from patients.models import Patient
 from patient_portal.models import PatientInvite
 from patient_portal.validators import validate_office_hours
@@ -160,3 +161,23 @@ class AcceptInviteSerializer(serializers.Serializer):
 
         attrs['invite'] = invite
         return attrs
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender_name = serializers.CharField(source='sender.get_full_name', default='', read_only=True)
+    is_from_staff = serializers.SerializerMethodField()
+    # EncryptedTextField isn't recognized by DRF's automatic field mapping.
+    body = serializers.CharField()
+
+    class Meta:
+        model = Message
+        fields = ['id', 'sender_name', 'is_from_staff', 'body', 'sent_at', 'read_at']
+        read_only_fields = ['sent_at', 'read_at']
+
+    def get_is_from_staff(self, obj):
+        return bool(obj.sender) and not is_patient(obj.sender)
+
+
+class DeviceTokenSerializer(serializers.Serializer):
+    fcm_token = serializers.CharField(max_length=255)
+    platform = serializers.ChoiceField(choices=DeviceToken.PLATFORM_CHOICES)

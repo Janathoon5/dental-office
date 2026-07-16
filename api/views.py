@@ -10,13 +10,16 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from appointments.models import AppointmentRequest
+from messaging.models import Conversation, DeviceToken
 
 from .permissions import IsPatient
 from .serializers import (
     AcceptInviteSerializer,
     AppointmentRequestSerializer,
     AppointmentSerializer,
+    DeviceTokenSerializer,
     InvoiceSerializer,
+    MessageSerializer,
     PatientDashboardSerializer,
     PatientProfileSerializer,
     PatientTokenObtainPairSerializer,
@@ -164,3 +167,53 @@ class AcceptInviteView(APIView):
 
         refresh = RefreshToken.for_user(user)
         return Response({'access': str(refresh.access_token), 'refresh': str(refresh)})
+
+
+class MessageListCreateView(generics.ListCreateAPIView):
+    """A patient's own conversation is always resolved from their
+    authenticated identity (never a client-supplied id), so there's no
+    object-level access path to another patient's conversation to guard
+    against here."""
+    serializer_class = MessageSerializer
+    permission_classes = [IsPatient]
+
+    def get_queryset(self):
+        patient = self.request.user.patient_profile
+        conversation, _ = Conversation.objects.get_or_create(patient=patient)
+        return conversation.messages.order_by('sent_at')
+
+    def perform_create(self, serializer):
+        patient = self.request.user.patient_profile
+        conversation, _ = Conversation.objects.get_or_create(patient=patient)
+        serializer.save(conversation=conversation, sender=self.request.user)
+
+
+class MarkMessagesReadView(APIView):
+    permission_classes = [IsPatient]
+
+    def post(self, request):
+        patient = request.user.patient_profile
+        try:
+            conversation = patient.conversation
+        except Conversation.DoesNotExist:
+            return Response(status=204)
+        conversation.messages.filter(read_at__isnull=True).exclude(
+            sender=request.user
+        ).update(read_at=timezone.now())
+        return Response(status=204)
+
+
+class RegisterDeviceView(APIView):
+    permission_classes = [IsPatient]
+
+    def post(self, request):
+        serializer = DeviceTokenSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        DeviceToken.objects.update_or_create(
+            fcm_token=serializer.validated_data['fcm_token'],
+            defaults={
+                'patient': request.user.patient_profile,
+                'platform': serializer.validated_data['platform'],
+            },
+        )
+        return Response(status=201)

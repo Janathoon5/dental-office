@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:safe_device/safe_device.dart';
@@ -10,11 +11,19 @@ import 'api_client.dart';
 import 'app_lock.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
+import 'push_notifications.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Android picks up config from android/app/google-services.json
+  // automatically via the Google Services Gradle plugin — no explicit
+  // options needed here. iOS isn't configured yet (no GoogleService-Info
+  // .plist — this machine can't build/test iOS at all, see memory).
+  await Firebase.initializeApp();
+  await initPushNotifications();
 
   // Blocks screenshots/screen recording and (Android) the recents-list
   // thumbnail; adds an automatic blur-on-background overlay on iOS.

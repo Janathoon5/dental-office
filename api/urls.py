@@ -14,4 +14,7 @@ urlpatterns = [
     path('records/treatment-records/', views.TreatmentRecordListView.as_view(), name='api_treatment_records'),
     path('records/treatment-plans/', views.TreatmentPlanListView.as_view(), name='api_treatment_plans'),
     path('invoices/', views.InvoiceListView.as_view(), name='api_invoices'),
+    path('messages/', views.MessageListCreateView.as_view(), name='api_messages'),
+    path('messages/mark-read/', views.MarkMessagesReadView.as_view(), name='api_messages_mark_read'),
+    path('devices/register/', views.RegisterDeviceView.as_view(), name='api_register_device'),
 ]

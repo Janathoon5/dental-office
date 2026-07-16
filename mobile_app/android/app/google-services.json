@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "277059391889",
+    "project_id": "dental-offices",
+    "storage_bucket": "dental-offices.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:277059391889:android:4278975ebf76aa622d0a30",
+        "android_client_info": {
+          "package_name": "com.dentaloffice.dental_office_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDufZ5vGlSOIXyzPKe1LNy4lwyBnMfnhBY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -5,7 +5,9 @@ import 'appointments_screen.dart';
 import 'dashboard_screen.dart';
 import 'invoices_screen.dart';
 import 'login_screen.dart';
+import 'messages_screen.dart';
 import 'profile_screen.dart';
+import 'push_notifications.dart';
 import 'records_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -19,6 +21,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _tabIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fire-and-forget: a missing/failed token registration shouldn't block
+    // using the app, just means this device won't get push notifications.
+    registerDeviceToken(widget.apiClient);
+  }
 
   Future<void> _logout() async {
     await widget.apiClient.clearTokens();
@@ -38,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
       AppointmentsScreen(apiClient: widget.apiClient),
       RecordsScreen(apiClient: widget.apiClient),
       InvoicesScreen(apiClient: widget.apiClient),
+      MessagesScreen(apiClient: widget.apiClient),
       ProfileScreen(apiClient: widget.apiClient),
     ];
 
@@ -58,6 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.calendar_month), label: 'Visits'),
           NavigationDestination(icon: Icon(Icons.folder_shared), label: 'Records'),
           NavigationDestination(icon: Icon(Icons.receipt_long), label: 'Billing'),
+          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: 'Messages'),
           NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),

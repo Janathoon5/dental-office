@@ -7,6 +7,7 @@ from rest_framework import status
 from appointments.models import Appointment, AppointmentRequest
 from billing.models import Invoice, Payment
 from clinical.models import TreatmentPlan, TreatmentPlanItem, TreatmentRecord
+from messaging.models import Conversation, DeviceToken, Message
 from patient_portal.models import PatientInvite
 from patients.models import Patient
 from staff.models import StaffProfile
@@ -301,3 +302,62 @@ class AcceptInviteTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.user.refresh_from_db()
         self.assertFalse(self.user.is_active)
+
+
+class MessageTests(_PatientAPITestCase):
+    def test_list_messages_with_no_prior_conversation_returns_empty(self):
+        response = self.client.get('/api/v1/messages/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['results'], [])
+        self.assertTrue(Conversation.objects.filter(patient=self.patient).exists())
+
+    def test_patient_can_send_message(self):
+        response = self.client.post('/api/v1/messages/', {'body': 'Hello, I have a question.'})
+        self.assertEqual(response.status_code, 201)
+        self.assertFalse(response.data['is_from_staff'])
+
+        message = Message.objects.get(pk=response.data['id'])
+        self.assertEqual(message.sender, self.patient_user)
+        self.assertEqual(message.body, 'Hello, I have a question.')
+        self.assertEqual(message.conversation.patient, self.patient)
+
+    def test_staff_message_flagged_as_from_staff(self):
+        staff_user = User.objects.create_user(username='staffuser2', password='testpass123')
+        StaffProfile.objects.create(user=staff_user, role='dentist')
+        conversation = Conversation.objects.create(patient=self.patient)
+        Message.objects.create(conversation=conversation, sender=staff_user, body='We got your message.')
+
+        response = self.client.get('/api/v1/messages/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['results'][0]['is_from_staff'])
+
+    def test_mark_read_only_affects_staff_messages(self):
+        staff_user = User.objects.create_user(username='staffuser3', password='testpass123')
+        StaffProfile.objects.create(user=staff_user, role='dentist')
+        conversation = Conversation.objects.create(patient=self.patient)
+        staff_message = Message.objects.create(conversation=conversation, sender=staff_user, body='From staff')
+        patient_message = Message.objects.create(conversation=conversation, sender=self.patient_user, body='From patient')
+
+        response = self.client.post('/api/v1/messages/mark-read/')
+        self.assertEqual(response.status_code, 204)
+
+        staff_message.refresh_from_db()
+        patient_message.refresh_from_db()
+        self.assertIsNotNone(staff_message.read_at)
+        self.assertIsNone(patient_message.read_at)
+
+    def test_register_device_token(self):
+        response = self.client.post('/api/v1/devices/register/', {
+            'fcm_token': 'abc123', 'platform': 'android',
+        })
+        self.assertEqual(response.status_code, 201)
+        token = DeviceToken.objects.get(fcm_token='abc123')
+        self.assertEqual(token.patient, self.patient)
+        self.assertEqual(token.platform, 'android')
+
+    def test_re_registering_same_token_updates_rather_than_duplicates(self):
+        self.client.post('/api/v1/devices/register/', {'fcm_token': 'abc123', 'platform': 'android'})
+        response = self.client.post('/api/v1/devices/register/', {'fcm_token': 'abc123', 'platform': 'ios'})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(DeviceToken.objects.filter(fcm_token='abc123').count(), 1)
+        self.assertEqual(DeviceToken.objects.get(fcm_token='abc123').platform, 'ios')

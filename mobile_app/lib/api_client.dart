@@ -209,6 +209,27 @@ class ApiClient {
     return response.data['results'] as List<dynamic>;
   }
 
+  Future<List<dynamic>> fetchMessages() async {
+    final response = await dio.get('messages/');
+    return response.data['results'] as List<dynamic>;
+  }
+
+  Future<Map<String, dynamic>> sendMessage(String body) async {
+    final response = await dio.post('messages/', data: {'body': body});
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<void> markMessagesRead() async {
+    await dio.post('messages/mark-read/');
+  }
+
+  Future<void> registerDevice(String fcmToken, String platform) async {
+    await dio.post('devices/register/', data: {
+      'fcm_token': fcmToken,
+      'platform': platform,
+    });
+  }
+
   /// Extracts a human-readable message from a DRF error response, which may
   /// be a list of strings, a dict of field -> [messages], or a plain string.
   static String errorMessage(Object error) {

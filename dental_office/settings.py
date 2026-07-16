@@ -31,6 +31,12 @@ SECRET_KEY = config('SECRET_KEY')
 # durable backup outside of Railway's env var UI.
 FIELD_ENCRYPTION_KEY = config('FIELD_ENCRYPTION_KEY')
 
+# Path to the Firebase service account JSON key, used to send push
+# notifications for patient messaging (messaging/push.py). Optional — if
+# unset or the file doesn't exist, push notifications are silently disabled
+# rather than erroring (e.g. a fresh clone without the key configured yet).
+FIREBASE_SERVICE_ACCOUNT_PATH = config('FIREBASE_SERVICE_ACCOUNT_PATH', default='')
+
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
@@ -66,6 +72,7 @@ INSTALLED_APPS = [
     'billing',
     'inventory',
     'patient_portal',
+    'messaging',
     'anymail',
     'axes',
     'auditlog',
