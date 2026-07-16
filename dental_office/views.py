@@ -10,6 +10,12 @@ from billing.models import Invoice
 from dental_office.roles import staff_required, dentist_required, is_dentist
 
 
+def privacy_policy(request):
+    return render(request, 'privacy_policy.html', {
+        'last_updated': datetime.date.today().strftime('%B %d, %Y'),
+    })
+
+
 @staff_required
 def dashboard(request):
     today = timezone.localdate()

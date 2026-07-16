@@ -5,9 +5,13 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-// Android emulator reaches the host machine's localhost via the special
-// alias 10.0.2.2 (not 127.0.0.1, which resolves to the emulator itself).
-const _baseUrl = 'http://10.0.2.2:8000/api/v1/';
+// Production Railway deployment — see railway_deployment_notes memory for
+// the app's live URL. Real patients' devices can't reach 10.0.2.2 (that's
+// only a valid address from inside the Android emulator), so this must
+// point at the actual public server before the app is useful off a dev
+// machine. HTTPS here is also what activates the pinned-CA check in
+// _pinHttpClient below — there's no TLS handshake to pin against plain HTTP.
+const _baseUrl = 'https://web-production-c76a8.up.railway.app/api/v1/';
 
 const _paths = {'auth/login/', 'auth/refresh/', 'auth/accept-invite/'};
 
