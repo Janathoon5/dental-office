@@ -10,6 +10,7 @@ urlpatterns = [
     path('verify-otp/', verify_otp, name='verify_otp'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('privacy-policy/', views.privacy_policy, name='privacy_policy'),
+    path('account-deletion/', views.account_deletion, name='account_deletion'),
     path('', views.dashboard, name='dashboard'),
     path('patients/', include('patients.urls')),
     path('appointments/', include('appointments.urls')),

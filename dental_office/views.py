@@ -16,6 +16,13 @@ def privacy_policy(request):
     })
 
 
+def account_deletion(request):
+    return render(request, 'account_deletion.html', {
+        'last_updated': datetime.date.today().strftime('%B %d, %Y'),
+        'contact_email': 'jonathanhoang5@gmail.com',
+    })
+
+
 @staff_required
 def dashboard(request):
     today = timezone.localdate()
