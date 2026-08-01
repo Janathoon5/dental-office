@@ -73,6 +73,7 @@ class _DentalOfficeAppState extends State<DentalOfficeApp> {
     return MaterialApp(
       navigatorKey: navigatorKey,
       title: 'Dental Office',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal)),
       builder: (context, child) {
         // A compromised OS undermines every other protection in this app,
