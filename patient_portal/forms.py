@@ -1,7 +1,7 @@
 from django import forms
-from datetime import date
 from django.contrib.auth.forms import SetPasswordForm as _SetPasswordForm
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from appointments.models import AppointmentRequest
 from patients.models import Patient
 from .validators import validate_office_hours
@@ -27,7 +27,10 @@ class AppointmentRequestForm(forms.ModelForm):
 
     def clean_preferred_date(self):
         d = self.cleaned_data.get('preferred_date')
-        if d and d < date.today():
+        # localdate(), not date.today(): the server runs UTC, so after 8pm
+        # Eastern date.today() is already tomorrow and would reject a
+        # request for what is still today at the office.
+        if d and d < timezone.localdate():
             raise forms.ValidationError("Please choose a future date.")
         return d
 

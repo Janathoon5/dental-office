@@ -54,6 +54,28 @@ class StaffSendMessageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Hello there')
 
+    def test_messaging_survives_a_soft_deleted_conversation(self):
+        """Regression guard: Conversation.patient is a OneToOneField and
+        `objects` is active-only, so get_or_create() couldn't see a
+        soft-deleted conversation, fell through to create(), and hit the
+        unique constraint — permanently breaking messaging with that patient
+        on both the staff side and the mobile app."""
+        conversation = Conversation.objects.create(patient=self.patient)
+        conversation.delete(deleted_by=self.staff_user)
+        self.assertFalse(Conversation.objects.filter(patient=self.patient).exists())
+
+        response = self.client.post(
+            reverse('staff_send_message', args=[self.patient.pk]),
+            {'body': 'Back in touch'},
+        )
+        self.assertEqual(response.status_code, 302)
+        # Revived in place rather than duplicated.
+        self.assertEqual(Conversation.all_objects.filter(patient=self.patient).count(), 1)
+        revived = Conversation.objects.get(patient=self.patient)
+        self.assertTrue(revived.is_active)
+        self.assertIsNone(revived.deleted_at)
+        self.assertEqual(revived.messages.get().body, 'Back in touch')
+
 
 class PushNotificationTests(TestCase):
     def setUp(self):

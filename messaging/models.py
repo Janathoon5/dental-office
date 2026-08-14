@@ -21,6 +21,22 @@ class Conversation(SoftDeleteModel):
     def __str__(self):
         return f"Conversation with {self.patient}"
 
+    @classmethod
+    def get_or_start_for(cls, patient):
+        """Resolve a patient's conversation, reviving a soft-deleted one
+        instead of trying to insert a second row. `patient` is a
+        OneToOneField, so a plain `objects.get_or_create()` (active-only)
+        can't see a soft-deleted row, falls through to create(), and dies on
+        the unique constraint — permanently breaking messaging with that
+        patient on both the staff side and the mobile app."""
+        conversation, created = cls.all_objects.get_or_create(patient=patient)
+        if not created and not conversation.is_active:
+            conversation.is_active = True
+            conversation.deleted_at = None
+            conversation.deleted_by = None
+            conversation.save(update_fields=['is_active', 'deleted_at', 'deleted_by'])
+        return conversation
+
 
 class Message(SoftDeleteModel):
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')

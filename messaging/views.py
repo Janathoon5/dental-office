@@ -10,6 +10,6 @@ def staff_send_message(request, patient_pk):
     if request.method == 'POST':
         body = request.POST.get('body', '').strip()
         if body:
-            conversation, _ = Conversation.objects.get_or_create(patient=patient)
+            conversation = Conversation.get_or_start_for(patient)
             Message.objects.create(conversation=conversation, sender=request.user, body=body)
     return redirect('patient_detail', pk=patient_pk)

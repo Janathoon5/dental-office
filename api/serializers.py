@@ -1,7 +1,6 @@
-from datetime import date
-
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -90,7 +89,10 @@ class AppointmentRequestSerializer(serializers.ModelSerializer):
         read_only_fields = ['status', 'submitted_at']
 
     def validate_preferred_date(self, value):
-        if value < date.today():
+        # localdate(), not date.today(): the server runs UTC, so after 8pm
+        # Eastern date.today() is already tomorrow and would reject a
+        # request for what is still today at the office.
+        if value < timezone.localdate():
             raise serializers.ValidationError('Please choose a future date.')
         return value
 

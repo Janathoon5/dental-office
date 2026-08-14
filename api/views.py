@@ -179,12 +179,12 @@ class MessageListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         patient = self.request.user.patient_profile
-        conversation, _ = Conversation.objects.get_or_create(patient=patient)
+        conversation = Conversation.get_or_start_for(patient)
         return conversation.messages.order_by('sent_at')
 
     def perform_create(self, serializer):
         patient = self.request.user.patient_profile
-        conversation, _ = Conversation.objects.get_or_create(patient=patient)
+        conversation = Conversation.get_or_start_for(patient)
         serializer.save(conversation=conversation, sender=self.request.user)
 
 

@@ -10,15 +10,23 @@ from billing.models import Invoice
 from dental_office.roles import staff_required, dentist_required, is_dentist
 
 
+# Bump these by hand whenever the corresponding template's wording actually
+# changes. They must NOT be date.today(): these are legal documents, and a
+# "last updated" that silently advances every day tells users the terms
+# changed when they didn't (and hides it when they really do).
+PRIVACY_POLICY_LAST_UPDATED = datetime.date(2026, 7, 16)
+ACCOUNT_DELETION_LAST_UPDATED = datetime.date(2026, 7, 29)
+
+
 def privacy_policy(request):
     return render(request, 'privacy_policy.html', {
-        'last_updated': datetime.date.today().strftime('%B %d, %Y'),
+        'last_updated': PRIVACY_POLICY_LAST_UPDATED.strftime('%B %d, %Y'),
     })
 
 
 def account_deletion(request):
     return render(request, 'account_deletion.html', {
-        'last_updated': datetime.date.today().strftime('%B %d, %Y'),
+        'last_updated': ACCOUNT_DELETION_LAST_UPDATED.strftime('%B %d, %Y'),
         'contact_email': 'jonathanhoang5@gmail.com',
     })
 
