@@ -46,6 +46,16 @@ class SoftDeleteAdminMixin:
     bulk action calls queryset.delete(), which bypasses a model's delete()
     entirely)."""
 
+    soft_delete_readonly_fields = ('is_active', 'deleted_at', 'deleted_by')
+
+    def get_readonly_fields(self, request, obj=None):
+        # Without this, is_active/deleted_at/deleted_by render as plain
+        # editable form fields — unchecking "is active" and saving silently
+        # soft-deletes the record without ever going through delete(), so
+        # deleted_at/deleted_by never get set. Deletion must go through the
+        # actual delete action/button below, which sets them correctly.
+        return tuple(super().get_readonly_fields(request, obj)) + self.soft_delete_readonly_fields
+
     def get_queryset(self, request):
         return self.model.all_objects.all()
 

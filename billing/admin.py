@@ -6,6 +6,11 @@ from .models import Invoice, Payment
 class PaymentInline(admin.TabularInline):
     model = Payment
     extra = 0
+    # Payment is a SoftDeleteModel; without this, is_active/deleted_at/
+    # deleted_by render as plain editable fields in the inline row, and
+    # unchecking "is active" would soft-delete without going through
+    # delete() (see SoftDeleteAdminMixin for the full rationale).
+    readonly_fields = ['is_active', 'deleted_at', 'deleted_by']
 
 
 @admin.register(Invoice)
