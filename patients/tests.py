@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from staff.models import StaffProfile, TOTPDevice
+from patient_portal.models import PatientInvite
 from .models import MedicalAlert, Patient
 
 
@@ -68,3 +69,33 @@ class PatientAccessControlTests(TestCase):
         response = self.client.get(reverse('patient_detail', args=[self.other_patient.pk]))
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse('login'), response.url)
+
+
+class SendPatientInviteTests(TestCase):
+    """Regression guard: re-sending a portal invite must invalidate any
+    earlier unused invite for that patient, otherwise an old email/link
+    could still be used to reset the account's password long after a newer
+    invite was issued and used."""
+
+    def setUp(self):
+        self.patient = Patient.objects.create(
+            first_name='Invite', last_name='Target',
+            date_of_birth=datetime.date(1990, 1, 1), phone='555-0000',
+            email='invite-target@example.com',
+        )
+        self.staff_user = User.objects.create_user(username='staffuser2', password='testpass123')
+        StaffProfile.objects.create(user=self.staff_user, role='dentist')
+        TOTPDevice.objects.create(user=self.staff_user, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        self.client.force_login(self.staff_user)
+
+    def test_resending_invite_invalidates_the_previous_one(self):
+        self.client.post(reverse('send_patient_invite', args=[self.patient.pk]))
+        first_invite = PatientInvite.objects.get(patient=self.patient)
+        self.assertTrue(first_invite.is_valid())
+
+        self.client.post(reverse('send_patient_invite', args=[self.patient.pk]))
+        first_invite.refresh_from_db()
+        second_invite = PatientInvite.objects.filter(patient=self.patient).exclude(pk=first_invite.pk).get()
+
+        self.assertFalse(first_invite.is_valid())
+        self.assertTrue(second_invite.is_valid())

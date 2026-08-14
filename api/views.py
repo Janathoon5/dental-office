@@ -209,11 +209,17 @@ class RegisterDeviceView(APIView):
     def post(self, request):
         serializer = DeviceTokenSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        DeviceToken.objects.update_or_create(
+        # Use all_objects (not the active-only default manager) so a token
+        # that was previously soft-deleted gets reactivated on re-registration
+        # instead of hitting the unique constraint on fcm_token.
+        DeviceToken.all_objects.update_or_create(
             fcm_token=serializer.validated_data['fcm_token'],
             defaults={
                 'patient': request.user.patient_profile,
                 'platform': serializer.validated_data['platform'],
+                'is_active': True,
+                'deleted_at': None,
+                'deleted_by': None,
             },
         )
         return Response(status=201)

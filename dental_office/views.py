@@ -64,8 +64,9 @@ def dashboard(request):
 @dentist_required
 def reports(request):
     today = timezone.localdate()
-    # Last 6 months of revenue
-    six_months_ago = today.replace(day=1) - datetime.timedelta(days=150)
+    # Last 6 months of revenue (6-month window including the current month)
+    month_index = today.month - 6  # 0-based months since Jan of some year
+    six_months_ago = datetime.date(today.year + month_index // 12, month_index % 12 + 1, 1)
     monthly_revenue = (
         Invoice.objects
         .filter(date_issued__gte=six_months_ago)

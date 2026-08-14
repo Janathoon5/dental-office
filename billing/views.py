@@ -11,7 +11,7 @@ from .forms import InvoiceForm, PaymentForm
 @staff_required
 def invoice_list(request):
     status = request.GET.get('status', '')
-    invoices = Invoice.objects.select_related('patient', 'appointment')
+    invoices = Invoice.objects.select_related('patient', 'appointment').prefetch_related('payments')
     if status:
         invoices = invoices.filter(status=status)
     return render(request, 'billing/invoice_list.html', {
@@ -40,7 +40,7 @@ def invoice_add(request):
             appt = Appointment.objects.get(pk=appt_pk)
             initial['appointment'] = appt
             initial['patient'] = appt.patient
-        except Appointment.DoesNotExist:
+        except (Appointment.DoesNotExist, ValueError):
             pass
 
     if request.method == 'POST':
@@ -80,5 +80,7 @@ def payment_add(request, invoice_pk):
             elif invoice.amount_paid() > 0:
                 invoice.status = 'partial'
             invoice.save()
-            return redirect('invoice_detail', pk=invoice_pk)
+        else:
+            errors = ' '.join(e for field in form.errors.values() for e in field)
+            messages.error(request, f'Payment not recorded: {errors}')
     return redirect('invoice_detail', pk=invoice_pk)

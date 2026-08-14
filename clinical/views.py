@@ -1,14 +1,14 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from auditlog.signals import accessed
-from dental_office.roles import dentist_required, staff_required
+from dental_office.roles import clinical_required, dentist_required, staff_required
 from patients.models import Patient
 from appointments.models import Appointment
 from .models import TreatmentRecord, TreatmentPlan, TreatmentPlanItem
 from .forms import TreatmentRecordForm, TreatmentPlanForm, TreatmentPlanItemForm
 
 
-@dentist_required
+@clinical_required
 def record_add(request, patient_pk):
     patient = get_object_or_404(Patient, pk=patient_pk)
     initial = {'patient': patient}
@@ -19,7 +19,7 @@ def record_add(request, patient_pk):
             initial['appointment'] = appt
             initial['date'] = appt.date
             initial['dentist'] = appt.dentist
-        except Appointment.DoesNotExist:
+        except (Appointment.DoesNotExist, ValueError):
             pass
 
     if request.method == 'POST':
@@ -36,7 +36,7 @@ def record_add(request, patient_pk):
     })
 
 
-@dentist_required
+@clinical_required
 def record_edit(request, pk):
     record = get_object_or_404(TreatmentRecord, pk=pk)
     if request.method == 'POST':

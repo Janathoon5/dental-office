@@ -1,11 +1,12 @@
 import datetime
 
 from django.contrib.auth.models import Group, User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from patients.models import Patient
 from staff.models import StaffProfile, TOTPDevice
+from .forms import AppointmentForm
 from .models import Appointment, AppointmentRequest
 
 
@@ -74,3 +75,64 @@ class AppointmentAccessControlTests(TestCase):
 def timezone_today_plus(days):
     from django.utils import timezone
     return timezone.localdate() + datetime.timedelta(days=days)
+
+
+class AppointmentDoubleBookingTests(TestCase):
+    """Regression guard: a dentist must not be bookable for two overlapping
+    appointments — previously AppointmentForm had no overlap check at all."""
+
+    def setUp(self):
+        self.patient = Patient.objects.create(
+            first_name='One', last_name='Patient',
+            date_of_birth=datetime.date(1990, 1, 1), phone='555-0000',
+        )
+        self.other_patient = Patient.objects.create(
+            first_name='Two', last_name='Patient',
+            date_of_birth=datetime.date(1990, 1, 1), phone='555-0001',
+        )
+        self.dentist_user = User.objects.create_user(username='drtooth', password='testpass123')
+        StaffProfile.objects.create(user=self.dentist_user, role='dentist')
+        self.date = timezone_today_plus(3)
+        Appointment.objects.create(
+            patient=self.patient, dentist=self.dentist_user,
+            date=self.date, start_time=datetime.time(10, 0), duration_minutes=60,
+        )
+
+    def _form_data(self, **overrides):
+        data = {
+            'patient': self.other_patient.pk,
+            'dentist': self.dentist_user.pk,
+            'date': self.date.isoformat(),
+            'start_time': '10:30',
+            'duration_minutes': 30,
+            'appointment_type': 'checkup',
+            'status': 'scheduled',
+            'notes': '',
+        }
+        data.update(overrides)
+        return data
+
+    def test_overlapping_appointment_for_same_dentist_is_rejected(self):
+        form = AppointmentForm(data=self._form_data())
+        self.assertFalse(form.is_valid())
+
+    def test_non_overlapping_appointment_for_same_dentist_is_accepted(self):
+        form = AppointmentForm(data=self._form_data(start_time='11:00'))
+        self.assertTrue(form.is_valid(), form.errors)
+
+
+class AppointmentRequestRateLimitTests(TestCase):
+    """Regression guard: the public, unauthenticated appointment-request form
+    had no throttling and could be hammered to flood the AppointmentRequest
+    table or trigger a wave of confirmation emails.
+
+    RATELIMIT_ENABLE is normally forced off under `manage.py test` (see
+    settings.py) so unrelated tests aren't rate-limited by shared IP; this
+    test explicitly re-enables it to verify the limit itself works."""
+
+    @override_settings(RATELIMIT_ENABLE=True)
+    def test_excessive_requests_from_one_ip_are_blocked(self):
+        url = reverse('appointment_request')
+        statuses = [self.client.get(url).status_code for _ in range(11)]
+        self.assertIn(200, statuses[:10])
+        self.assertEqual(statuses[-1], 403)

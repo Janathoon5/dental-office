@@ -222,7 +222,7 @@ def accept_invite(request, token):
             invite.used = True
             invite.save()
 
-            auth_login(request, user)
+            auth_login(request, user, backend='dental_office.backends.CaseInsensitiveModelBackend')
             messages.success(request, f'Welcome, {user.first_name}! Your patient portal is ready.')
             return redirect('patient_dashboard')
     else:

@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 from dental_office.mixins import SoftDeleteModel
 from patients.models import Patient
@@ -45,7 +48,7 @@ class Payment(SoftDeleteModel):
 
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='payments')
     date = models.DateField(auto_now_add=True)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     method = models.CharField(max_length=20, choices=METHOD_CHOICES, default='card')
     notes = models.CharField(max_length=200, blank=True)
 

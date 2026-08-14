@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.core.management import call_command
 from django.utils import timezone
+from django_ratelimit.decorators import ratelimit
 import datetime
 import io
 from dental_office.roles import staff_required
@@ -85,6 +86,7 @@ def appointment_cancel(request, pk):
     return render(request, 'appointments/appointment_confirm_cancel.html', {'appointment': appointment})
 
 
+@ratelimit(key='ip', rate='10/m', block=True)
 def appointment_request(request):
     if request.method == 'POST':
         form = AppointmentRequestForm(request.POST)
@@ -95,7 +97,7 @@ def appointment_request(request):
         form = AppointmentRequestForm()
     return render(request, 'appointments/appointment_request.html', {
         'form': form,
-        'today': datetime.date.today(),
+        'today': timezone.localdate(),
     })
 
 
@@ -151,7 +153,10 @@ def reminders_dashboard(request):
 @staff_required
 def send_reminders_now(request):
     if request.method == 'POST':
-        days = int(request.POST.get('days', 1))
+        try:
+            days = int(request.POST.get('days', 1))
+        except ValueError:
+            days = 1
         force = request.POST.get('force') == '1'
         out = io.StringIO()
         try:

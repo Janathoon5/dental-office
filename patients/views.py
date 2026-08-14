@@ -77,8 +77,10 @@ def send_patient_invite(request, pk):
         patient.user = user
         patient.save()
 
-    # Create a fresh invite token
+    # Create a fresh invite token, invalidating any earlier unused ones so an
+    # old email/link can't still be used to take over the account later.
     from patient_portal.models import PatientInvite
+    PatientInvite.objects.filter(patient=patient, used=False).update(used=True)
     invite = PatientInvite.objects.create(patient=patient)
 
     invite_url = request.build_absolute_uri(
@@ -112,6 +114,9 @@ def alert_add(request, patient_pk):
             alert = form.save(commit=False)
             alert.patient = patient
             alert.save()
+        else:
+            errors = ' '.join(e for field in form.errors.values() for e in field)
+            messages.error(request, f'Alert not added: {errors}')
     return redirect('patient_detail', pk=patient_pk)
 
 

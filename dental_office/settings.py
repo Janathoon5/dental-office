@@ -197,6 +197,12 @@ STORAGES = {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
+# Jazzmin's admin/base.html references `{% static 'vendor/bootswatch' %}` (a
+# bare directory, for its client-side theme-switcher script) rather than an
+# actual collected file. Strict manifest lookups 500 on that with "Missing
+# staticfiles manifest entry" since it was never collected as a file. This
+# tells WhiteNoise to fall back to a best-effort hash instead of raising.
+WHITENOISE_MANIFEST_STRICT = False
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'   # only used by the FileSystemStorage fallback above
 

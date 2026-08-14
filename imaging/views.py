@@ -1,3 +1,4 @@
+from django.contrib import messages
 from django.shortcuts import render, get_object_or_404, redirect
 from auditlog.signals import accessed
 
@@ -31,6 +32,9 @@ def staff_image_upload(request, patient_pk):
             image.uploaded_by = request.user
             image.uploaded_by_patient = False
             image.save()
+        else:
+            errors = ' '.join(e for field in form.errors.values() for e in field)
+            messages.error(request, f'Upload failed: {errors}')
     return redirect('staff_image_list', patient_pk=patient_pk)
 
 

@@ -14,6 +14,10 @@ def is_receptionist(user):
     return hasattr(user, 'staff_profile') and user.staff_profile.role == 'receptionist'
 
 
+def is_clinical_staff(user):
+    return hasattr(user, 'staff_profile') and user.staff_profile.is_clinical()
+
+
 def is_staff_member(user):
     return user.is_staff or hasattr(user, 'staff_profile')
 
@@ -59,6 +63,22 @@ def staff_required(view_func):
             return redirect('login')
         if not is_staff_member(request.user):
             return redirect('patient_dashboard')
+        needs_2fa = _require_2fa(request.user)
+        if needs_2fa:
+            return needs_2fa
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def clinical_required(view_func):
+    """Dentists and hygienists — for logging treatment actually performed,
+    as opposed to dentist_required's diagnosis/planning gate."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('login')
+        if not (request.user.is_superuser or is_clinical_staff(request.user)):
+            return redirect('dashboard')
         needs_2fa = _require_2fa(request.user)
         if needs_2fa:
             return needs_2fa

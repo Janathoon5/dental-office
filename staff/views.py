@@ -6,8 +6,17 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.utils.http import url_has_allowed_host_and_scheme
 from .models import TOTPDevice
 from dental_office.roles import get_post_login_redirect, is_staff_member
+
+
+def _safe_next(request, next_url):
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return next_url
+    return None
 
 
 def login_view(request):
@@ -17,27 +26,30 @@ def login_view(request):
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
+        next_url = _safe_next(request, request.POST.get('next'))
         user = authenticate(request, username=username, password=password)
 
         if user is None:
             messages.error(request, 'Invalid username or password.')
-            return render(request, 'registration/login.html')
+            return render(request, 'registration/login.html', {'next': next_url or ''})
 
         # Check if user has confirmed 2FA
         try:
             device = user.totp_device
             if device.confirmed:
-                # Stash user id in session and send to OTP step
+                # Stash user id (and where to land afterward) in session and send to OTP step
                 request.session['pending_2fa_user'] = user.pk
+                request.session['pending_2fa_next'] = next_url
                 return redirect('verify_otp')
         except TOTPDevice.DoesNotExist:
             pass
 
         # No 2FA set up — log in directly
         login(request, user)
-        return redirect(request.POST.get('next') or get_post_login_redirect(user))
+        return redirect(next_url or get_post_login_redirect(user))
 
-    return render(request, 'registration/login.html')
+    next_url = _safe_next(request, request.GET.get('next'))
+    return render(request, 'registration/login.html', {'next': next_url or ''})
 
 
 OTP_ATTEMPT_LIMIT = 5
@@ -61,10 +73,11 @@ def verify_otp(request):
         totp = pyotp.TOTP(device.secret)
         if totp.verify(otp, valid_window=1):
             del request.session['pending_2fa_user']
+            next_url = request.session.pop('pending_2fa_next', None)
             request.session.pop('otp_attempts', None)
             user.backend = 'dental_office.backends.CaseInsensitiveModelBackend'
             login(request, user)
-            return redirect(get_post_login_redirect(user))
+            return redirect(next_url or get_post_login_redirect(user))
         else:
             attempts = request.session.get('otp_attempts', 0) + 1
             request.session['otp_attempts'] = attempts

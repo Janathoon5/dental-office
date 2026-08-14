@@ -74,4 +74,7 @@ def send_new_message_push(message):
             logger.exception('Failed to send push notification to a device token.')
 
     if stale_tokens:
-        patient.device_tokens.filter(fcm_token__in=stale_tokens).delete()
+        # Soft-delete each instance rather than a bulk queryset .delete(),
+        # which would bypass SoftDeleteModel and hard-delete the rows.
+        for stale in patient.device_tokens.filter(fcm_token__in=stale_tokens):
+            stale.delete()

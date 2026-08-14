@@ -1,10 +1,12 @@
+from django.db import transaction
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
+
+from dental_office.roles import staff_required
 from .models import SupplyItem
 from .forms import SupplyItemForm
 
 
-@login_required
+@staff_required
 def supply_list(request):
     items = SupplyItem.objects.all()
     low_stock = [i for i in items if i.is_low_stock()]
@@ -14,7 +16,7 @@ def supply_list(request):
     })
 
 
-@login_required
+@staff_required
 def supply_add(request):
     if request.method == 'POST':
         form = SupplyItemForm(request.POST)
@@ -26,7 +28,7 @@ def supply_add(request):
     return render(request, 'inventory/supply_form.html', {'form': form, 'title': 'Add Supply Item'})
 
 
-@login_required
+@staff_required
 def supply_edit(request, pk):
     item = get_object_or_404(SupplyItem, pk=pk)
     if request.method == 'POST':
@@ -39,14 +41,15 @@ def supply_edit(request, pk):
     return render(request, 'inventory/supply_form.html', {'form': form, 'title': 'Edit Supply Item', 'item': item})
 
 
-@login_required
+@staff_required
 def supply_adjust(request, pk):
-    item = get_object_or_404(SupplyItem, pk=pk)
     if request.method == 'POST':
         try:
             delta = int(request.POST.get('delta') or 0)
         except ValueError:
             delta = 0
-        item.quantity = max(0, item.quantity + delta)
-        item.save()
+        with transaction.atomic():
+            item = get_object_or_404(SupplyItem.objects.select_for_update(), pk=pk)
+            item.quantity = max(0, item.quantity + delta)
+            item.save()
     return redirect('supply_list')
