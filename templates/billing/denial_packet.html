@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}Appeal Packet — {{ denial.invoice.patient.full_name }}{% endblock %}
+{% block page_title %}Appeal Packet: {{ denial.invoice.patient.full_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'denial_detail' denial.pk %}" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Back to the denial</a>
+</div>
+
+{% if open_items %}
+<div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <span><i class="bi bi-exclamation-triangle-fill me-1"></i>The letter still has <strong>{{ open_items }}</strong> unanswered [BRACKETED] item{{ open_items|pluralize }}. They'll print exactly as they are.</span>
+    <a href="{% url 'denial_review' denial.pk %}" class="btn btn-sm btn-warning">Open Review Checklist</a>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <form method="post" class="card">
+            {% csrf_token %}
+            <div class="card-header fw-semibold"><i class="bi bi-file-earmark-pdf me-2"></i>What to include</div>
+            <div class="card-body">
+                <p class="small text-muted">Items that match the denied teeth or dates of service are already ticked. Everything is combined into one PDF, in this order, with the patient's name, date of birth and claim number on every page.</p>
+
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" checked disabled id="incLetter">
+                    <label class="form-check-label" for="incLetter"><strong>Appeal letter</strong> on the office letterhead</label>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" name="summary" id="incSummary" checked>
+                    <label class="form-check-label" for="incSummary"><strong>Claim summary</strong>: patient, member ID, claim number and the procedures billed</label>
+                </div>
+
+                <h6 class="fw-semibold mt-3">Clinical notes</h6>
+                {% for r in records %}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="records" value="{{ r.obj.pk }}" id="rec{{ r.obj.pk }}" {% if r.selected %}checked{% endif %}>
+                    <label class="form-check-label" for="rec{{ r.obj.pk }}">
+                        {{ r.obj.date|date:"m/d/Y" }} · {{ r.obj.procedure }}{% if r.obj.tooth_number %} · tooth {{ r.obj.tooth_number }}{% endif %}
+                        {% if not r.obj.notes %}<span class="text-muted small">(no notes)</span>{% endif %}
+                    </label>
+                </div>
+                {% empty %}
+                <p class="small text-muted">No treatment records for this patient.</p>
+                {% endfor %}
+
+                <h6 class="fw-semibold mt-3">X-rays and photos</h6>
+                {% for i in images %}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="images" value="{{ i.obj.pk }}" id="img{{ i.obj.pk }}" {% if i.selected %}checked{% endif %}>
+                    <label class="form-check-label" for="img{{ i.obj.pk }}">
+                        {{ i.obj.get_image_type_display }} · {{ i.obj.captured_date|date:"m/d/Y" }}{% if i.obj.tooth_number %} · tooth {{ i.obj.tooth_number }}{% endif %}{% if i.obj.caption %} · <span class="text-muted">{{ i.obj.caption }}</span>{% endif %}
+                    </label>
+                </div>
+                {% empty %}
+                <p class="small text-muted">No X-rays or photos uploaded for this patient. <a href="{% url 'staff_image_list' denial.invoice.patient.pk %}">Upload them</a> to include them here.</p>
+                {% endfor %}
+
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" name="original" id="incOriginal" checked>
+                    <label class="form-check-label" for="incOriginal"><strong>Copy of the insurer's letter</strong> (so the reviewer can match the appeal to the claim)</label>
+                </div>
+            </div>
+            <div class="card-footer">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-download me-1"></i>Download Appeal Packet (PDF)</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="bi bi-paperclip me-2"></i>What the AI suggested attaching</div>
+            <ul class="list-group list-group-flush">
+                {% for c in denial.checklist %}
+                <li class="list-group-item small">
+                    {% if c.on_file %}<i class="bi bi-check-circle-fill text-success me-1"></i>{% else %}<i class="bi bi-exclamation-circle-fill text-warning me-1"></i>{% endif %}
+                    {{ c.item }}
+                    {% if not c.on_file %}<div class="text-muted ms-4">Not in the app. Add it to the envelope or upload it first.</div>{% endif %}
+                </li>
+                {% empty %}
+                <li class="list-group-item small text-muted">No suggestions.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

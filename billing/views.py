@@ -2,7 +2,7 @@ import mimetypes
 
 from django.conf import settings
 from django.contrib import messages
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -13,6 +13,7 @@ from appointments.models import Appointment
 from .models import ClaimDenial, Invoice, InvoiceLineItem, OfficeSettings, Payment
 from .forms import DenialUpdateForm, DenialUploadForm, InvoiceForm, InvoiceLineItemForm, PaymentForm
 from .cdt import COMMON_CODES
+from .packet import build_packet, packet_options
 from .ai import start_ai_task, start_analysis, start_revision
 from .placeholders import CATEGORY_LABELS, count_by_category, find_placeholders
 
@@ -287,4 +288,38 @@ def denial_print(request, pk):
     return render(request, 'billing/denial_print.html', {
         'denial': denial,
         'office': OfficeSettings.load(),
+    })
+
+
+@staff_required
+def denial_packet(request, pk):
+    """Pick what goes in the appeal packet, then download it as one PDF."""
+    denial = get_object_or_404(ClaimDenial.objects.select_related('invoice__patient', 'invoice__appointment'), pk=pk)
+    accessed.send(sender=ClaimDenial, instance=denial)
+    if denial.ai_status != 'done':
+        return redirect('denial_detail', pk=denial.pk)
+    records, images = packet_options(denial)
+
+    if request.method == 'POST':
+        record_ids = set(request.POST.getlist('records'))
+        image_ids = set(request.POST.getlist('images'))
+        pdf = build_packet(
+            denial, OfficeSettings.load(),
+            records=[r['obj'] for r in records if str(r['obj'].pk) in record_ids],
+            images=[i['obj'] for i in images if str(i['obj'].pk) in image_ids],
+            include_summary=request.POST.get('summary') == 'on',
+            include_original=request.POST.get('original') == 'on',
+        )
+        patient = denial.invoice.patient
+        name = f'Appeal packet - {patient.last_name} - {denial.claim_number or f"invoice {denial.invoice.pk}"}.pdf'
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{name.replace(chr(34), "")}"'
+        return response
+
+    return render(request, 'billing/denial_packet.html', {
+        'denial': denial,
+        'records': records,
+        'images': images,
+        'open_items': len(find_placeholders(denial.appeal_letter)),
+        'ai_phi_allowed': settings.AI_PHI_ALLOWED,
     })

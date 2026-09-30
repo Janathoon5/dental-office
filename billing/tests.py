@@ -448,6 +448,29 @@ class DenialReviewTests(TestCase):
         self.assertEqual(self.client.get(self.url).status_code, 302)
 
 
+def make_pdf(text):
+    from reportlab.pdfgen import canvas
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    c.drawString(72, 720, text)
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def make_png(color=(200, 200, 200)):
+    from PIL import Image as PILImage
+    buf = io.BytesIO()
+    PILImage.new('RGB', (300, 200), color).save(buf, 'PNG')
+    return buf.getvalue()
+
+
+def pdf_text(data):
+    from pypdf import PdfReader
+    reader = PdfReader(io.BytesIO(data))
+    return reader, '\n'.join(page.extract_text() for page in reader.pages)
+
+
 class StaffTestMixin:
     def setUp(self):
         self.media = tempfile.mkdtemp()
@@ -512,3 +535,97 @@ class InvoiceLineItemTests(StaffTestMixin, TestCase):
         self.client.force_login(patient_user)
         self._add()
         self.assertFalse(InvoiceLineItem.objects.exists())
+
+
+class AppealPacketTests(StaffTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        from imaging.models import DentalImage
+        OfficeSettings.objects.create(pk=1, office_name='Bright Smiles Dental', npi='0000000000')
+        InvoiceLineItem.objects.create(invoice=self.invoice, service_date=datetime.date(2026, 8, 28), cdt_code='D2740',
+                                       description='Crown, porcelain/ceramic', tooth_number='14', fee=1500)
+        self.crown_note = TreatmentRecord.objects.create(patient=self.patient, date=datetime.date(2026, 8, 28),
+                                                         procedure='Porcelain crown', tooth_number='14',
+                                                         notes='Fractured mesiolingual cusp, 50 percent structure lost.')
+        self.other_note = TreatmentRecord.objects.create(patient=self.patient, date=datetime.date(2026, 1, 5),
+                                                         procedure='Cleaning', notes='Routine.')
+        self.xray = DentalImage.objects.create(patient=self.patient, image_type='xray', tooth_number='14',
+                                               captured_date=datetime.date(2026, 8, 14), caption='PA pre-op',
+                                               image=SimpleUploadedFile('pa.png', make_png()))
+        self.other_xray = DentalImage.objects.create(patient=self.patient, image_type='xray', tooth_number='3',
+                                                     captured_date=datetime.date(2026, 1, 5),
+                                                     image=SimpleUploadedFile('bw.png', make_png()))
+        self.denial = ClaimDenial.objects.create(
+            invoice=self.invoice, ai_status='done', claim_number='SDI-26-0918', insurer_name='Sunrise Dental',
+            letter=SimpleUploadedFile('eob.pdf', make_pdf('ORIGINAL EOB TEXT')),
+            appeal_letter='September 30, 2026\n\nDear Reviewer,\nPlease reconsider the crown on #14.\n\nSincerely,\nDr. Smith',
+            checklist=[{'item': 'Pre-op X-ray', 'why': 'x', 'on_file': True}],
+        )
+        self.url = reverse('denial_packet', args=[self.denial.pk])
+
+    def test_options_preselect_items_for_the_denied_tooth(self):
+        page = self.client.get(self.url)
+        self.assertContains(page, f'value="{self.crown_note.pk}" id="rec{self.crown_note.pk}" checked', html=False)
+        self.assertContains(page, f'value="{self.other_note.pk}" id="rec{self.other_note.pk}" >', html=False)
+        self.assertContains(page, f'value="{self.xray.pk}" id="img{self.xray.pk}" checked', html=False)
+        self.assertContains(page, f'value="{self.other_xray.pk}" id="img{self.other_xray.pk}" >', html=False)
+
+    def test_packet_pdf_contains_every_selected_part(self):
+        response = self.client.post(self.url, {
+            'summary': 'on', 'original': 'on',
+            'records': [self.crown_note.pk], 'images': [self.xray.pk],
+        })
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertIn('Appeal packet - Lopez - SDI-26-0918.pdf', response['Content-Disposition'])
+        reader, text = pdf_text(response.content)
+        # letter, summary, notes, X-ray, original EOB
+        self.assertEqual(len(reader.pages), 5)
+        for expected in ('Bright Smiles Dental', 'Please reconsider the crown on #14', 'Claim Summary',
+                         'SDI-448812', 'D2740', 'Fractured mesiolingual cusp', 'PA pre-op',
+                         'Maria Lopez · DOB 03/02/1985 · Claim SDI-26-0918', 'ORIGINAL EOB TEXT'):
+            self.assertIn(expected, text)
+        self.assertNotIn('Routine.', text)
+
+    def test_letter_only_packet(self):
+        response = self.client.post(self.url, {})
+        reader, text = pdf_text(response.content)
+        self.assertEqual(len(reader.pages), 1)
+        self.assertNotIn('ORIGINAL EOB TEXT', text)
+
+    def test_photo_of_insurer_letter_becomes_a_page(self):
+        self.denial.letter = SimpleUploadedFile('eob.png', make_png((255, 255, 255)))
+        self.denial.save()
+        reader, text = pdf_text(self.client.post(self.url, {'original': 'on'}).content)
+        self.assertEqual(len(reader.pages), 2)
+        self.assertIn("Copy of Insurer's Letter", text)
+
+    def test_unreadable_original_is_noted_instead_of_crashing(self):
+        self.denial.letter = SimpleUploadedFile('eob.pdf', b'not really a pdf')
+        self.denial.save()
+        reader, text = pdf_text(self.client.post(self.url, {'original': 'on'}).content)
+        self.assertIn('could not be added', text)
+
+    def test_open_items_warning_and_access(self):
+        self.denial.appeal_letter += '\n[DENTIST TO CONFIRM: cusp?]'
+        self.denial.save()
+        self.assertContains(self.client.get(self.url), 'unanswered [BRACKETED] item')
+        patient_user = User.objects.create_user(username='pt', password='testpass123')
+        patient_user.groups.add(Group.objects.get_or_create(name='Patient')[0])
+        self.client.force_login(patient_user)
+        self.assertEqual(self.client.get(self.url).status_code, 302)
+        self.assertEqual(self.client.post(self.url, {}).status_code, 302)
+
+
+class LetterLayoutTests(TestCase):
+    def test_signature_gap_after_closing_whether_or_not_letter_leaves_blank_lines(self):
+        from types import SimpleNamespace
+        from reportlab.platypus import Paragraph, Spacer
+        from .packet import _letter_section
+        office = SimpleNamespace(office_name='X', address='', phone='', email='', npi='', tax_id='')
+        for letter in ('Body.\n\nSincerely,\nDr. Smith', 'Body.\n\nSincerely,\n\n\n\nDr. Smith'):
+            story = _letter_section(SimpleNamespace(appeal_letter=letter), office)
+            texts = [(type(f).__name__, getattr(f, 'text', '')) for f in story]
+            i = texts.index(('Paragraph', 'Sincerely,'))
+            self.assertIsInstance(story[i + 1], Spacer)
+            self.assertGreaterEqual(story[i + 1].height, 30)
+            self.assertEqual(texts[i + 2], ('Paragraph', 'Dr. Smith'))

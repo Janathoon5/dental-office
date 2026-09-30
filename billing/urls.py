@@ -16,4 +16,5 @@ urlpatterns = [
     path('denials/<int:pk>/review/', views.denial_review, name='denial_review'),
     path('denials/<int:pk>/letter/', views.denial_letter_file, name='denial_letter_file'),
     path('denials/<int:pk>/print/', views.denial_print, name='denial_print'),
+    path('denials/<int:pk>/packet/', views.denial_packet, name='denial_packet'),
 ]
