@@ -57,6 +57,18 @@
                     <dd class="col-7">{{ patient.insurance_provider|default:"—" }}</dd>
                     <dt class="col-5 text-muted">Insurance ID</dt>
                     <dd class="col-7">{{ patient.insurance_id|default:"—" }}</dd>
+                    <dt class="col-5 text-muted">Next Cleaning</dt>
+                    <dd class="col-7">
+                        {% if recall.is_booked %}
+                            <span class="badge bg-success">Booked</span>
+                        {% elif recall.due_date %}
+                            {{ recall.due_date|date:"M j, Y" }}
+                            {% if recall.is_overdue %}<span class="badge bg-danger ms-1">Overdue</span>{% endif %}
+                        {% else %}
+                            <span class="text-muted">No cleaning on record</span>
+                        {% endif %}
+                        <div class="small text-muted">{{ patient.get_recall_interval_months_display }}</div>
+                    </dd>
                 </dl>
             </div>
         </div>

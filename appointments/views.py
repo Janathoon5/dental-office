@@ -8,6 +8,7 @@ import io
 from dental_office.roles import staff_required
 from .models import Appointment, AppointmentRequest, ReminderLog
 from .forms import AppointmentForm, AppointmentRequestForm
+from .recalls import recall_lists, DUE_SOON_DAYS
 
 
 @staff_required
@@ -44,10 +45,13 @@ def appointment_add(request):
     initial = {}
     patient_id = request.GET.get('patient')
     date = request.GET.get('date')
+    appt_type = request.GET.get('type')
     if patient_id:
         initial['patient'] = patient_id
     if date:
         initial['date'] = date
+    if appt_type in dict(Appointment.TYPE_CHOICES):
+        initial['appointment_type'] = appt_type
 
     if request.method == 'POST':
         form = AppointmentForm(request.POST)
@@ -168,3 +172,37 @@ def send_reminders_now(request):
         except Exception as e:
             messages.error(request, f"Error sending reminders: {e}")
     return redirect('reminders_dashboard')
+
+
+RECALL_TABS = [
+    ('overdue', 'Overdue'),
+    ('due_soon', f'Due in next {DUE_SOON_DAYS} days'),
+    ('never', 'No cleaning on record'),
+]
+
+
+@staff_required
+def recall_list(request):
+    lists = recall_lists()
+    show = request.GET.get('show')
+    if show not in lists:
+        show = 'overdue'
+    tabs = [(key, label, len(lists[key])) for key, label in RECALL_TABS]
+    return render(request, 'appointments/recalls.html', {
+        'items': lists[show],
+        'show': show,
+        'tabs': tabs,
+    })
+
+
+@staff_required
+def send_recalls_now(request):
+    if request.method == 'POST':
+        out = io.StringIO()
+        try:
+            call_command('send_recall_reminders', stdout=out)
+            last_line = [l for l in out.getvalue().strip().splitlines() if l.strip()][-1]
+            messages.success(request, last_line)
+        except Exception as e:
+            messages.error(request, f"Error sending recall emails: {e}")
+    return redirect('recall_list')

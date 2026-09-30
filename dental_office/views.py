@@ -56,6 +56,9 @@ def dashboard(request):
     except Exception:
         pass
 
+    from appointments.recalls import recall_lists
+    overdue_recalls = len(recall_lists(today)['overdue'])
+
     my_appointments_today = None
     if is_dentist(request.user):
         my_appointments_today = todays_appointments.filter(dentist=request.user).count()
@@ -65,6 +68,7 @@ def dashboard(request):
         'today': today,
         'stats': stats,
         'pending_requests': pending_requests,
+        'overdue_recalls': overdue_recalls,
         'my_appointments_today': my_appointments_today,
     })
 

@@ -1,3 +1,4 @@
+import io
 import datetime
 
 from django.contrib.auth.models import Group, User
@@ -136,3 +137,96 @@ class AppointmentRequestRateLimitTests(TestCase):
         statuses = [self.client.get(url).status_code for _ in range(11)]
         self.assertIn(200, statuses[:10])
         self.assertEqual(statuses[-1], 403)
+
+
+class RecallTests(TestCase):
+    """Recall due dates come from the last *completed* cleaning/checkup plus
+    the patient's interval; anyone already booked drops off the list."""
+
+    def setUp(self):
+        from django.utils import timezone
+        self.today = timezone.localdate()
+
+    def _patient(self, name, email='p@example.com', interval=6):
+        return Patient.objects.create(
+            first_name=name, last_name='Test', date_of_birth=datetime.date(1990, 1, 1),
+            phone='555-0000', email=email, recall_interval_months=interval,
+        )
+
+    def _appt(self, patient, days_from_today, status='completed', appt_type='cleaning'):
+        return Appointment.objects.create(
+            patient=patient, date=self.today + datetime.timedelta(days=days_from_today),
+            start_time=datetime.time(9, 0), status=status, appointment_type=appt_type,
+        )
+
+    def test_add_months_clamps_to_month_end(self):
+        from .recalls import add_months
+        self.assertEqual(add_months(datetime.date(2025, 8, 31), 6), datetime.date(2026, 2, 28))
+        self.assertEqual(add_months(datetime.date(2025, 11, 15), 3), datetime.date(2026, 2, 15))
+
+    def test_patients_are_grouped_correctly(self):
+        from .recalls import recall_lists
+        overdue = self._patient('Overdue')
+        self._appt(overdue, -250)
+        soon = self._patient('Soon')
+        self._appt(soon, -170)
+        fine = self._patient('Fine')
+        self._appt(fine, -30)
+        booked = self._patient('Booked')
+        self._appt(booked, -250)
+        self._appt(booked, 5, status='scheduled')
+        never = self._patient('Never')
+        cancelled_only = self._patient('CancelledOnly')
+        self._appt(cancelled_only, -250, status='cancelled')
+        filling_only = self._patient('FillingOnly')
+        self._appt(filling_only, -250, appt_type='filling')
+
+        lists = recall_lists(self.today)
+        names = {k: {i['patient'].first_name for i in v} for k, v in lists.items()}
+        self.assertEqual(names['overdue'], {'Overdue'})
+        self.assertEqual(names['due_soon'], {'Soon'})
+        self.assertEqual(names['never'], {'Never', 'CancelledOnly', 'FillingOnly'})
+
+    def test_interval_changes_due_date(self):
+        from .recalls import recall_lists
+        p = self._patient('Quarterly', interval=3)
+        self._appt(p, -100)
+        overdue = recall_lists(self.today)['overdue']
+        self.assertEqual([i['patient'] for i in overdue], [p])
+
+    def test_recall_email_sent_once_per_cycle(self):
+        from django.core import mail
+        from django.core.management import call_command
+        from .models import RecallNotice
+        p = self._patient('Overdue')
+        self._appt(p, -250)
+        no_email = self._patient('NoEmail', email='')
+        self._appt(no_email, -250)
+
+        call_command('send_recall_reminders', stdout=io.StringIO())
+        call_command('send_recall_reminders', stdout=io.StringIO())
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['p@example.com'])
+        self.assertEqual(RecallNotice.objects.filter(patient=p, status='sent').count(), 1)
+
+    def test_recall_pages_render_for_staff_only(self):
+        staff = User.objects.create_user(username='staffrecall', password='testpass123')
+        StaffProfile.objects.create(user=staff, role='dentist')
+        TOTPDevice.objects.create(user=staff, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        p = self._patient('Overdue')
+        self._appt(p, -250)
+
+        patient_user = User.objects.create_user(username='patrecall', password='testpass123')
+        patient_user.groups.add(Group.objects.get_or_create(name='Patient')[0])
+        self.client.force_login(patient_user)
+        self.assertEqual(self.client.get(reverse('recall_list')).status_code, 302)
+        self.assertEqual(self.client.post(reverse('send_recalls_now')).status_code, 302)
+
+        self.client.force_login(staff)
+        for show in ('overdue', 'due_soon', 'never', 'bogus'):
+            response = self.client.get(reverse('recall_list'), {'show': show})
+            self.assertEqual(response.status_code, 200)
+        self.assertContains(self.client.get(reverse('recall_list')), 'Overdue Test')
+        self.assertContains(self.client.get(reverse('patient_detail', args=[p.pk])), 'Overdue')
+        self.assertContains(self.client.get(reverse('dashboard')), 'Overdue Cleanings')

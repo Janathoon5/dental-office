@@ -96,3 +96,23 @@ class ReminderLog(models.Model):
 
     def __str__(self):
         return f"Reminder for {self.appointment} — {self.status}"
+
+
+class RecallNotice(models.Model):
+    """One row per recall email attempt. A patient's recall is identified by
+    its due date, so a 'sent' row for (patient, due_date) means that cycle's
+    email already went out and the daily job won't send it again."""
+    STATUS_CHOICES = ReminderLog.STATUS_CHOICES
+
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='recall_notices')
+    due_date = models.DateField()
+    sent_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='sent')
+    recipient_email = models.EmailField(blank=True)
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        return f"Recall for {self.patient} (due {self.due_date}) — {self.status}"

@@ -4,6 +4,14 @@ from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 from dental_office.mixins import SoftDeleteModel
 
 
+RECALL_INTERVAL_CHOICES = [
+    (3, 'Every 3 months'),
+    (4, 'Every 4 months'),
+    (6, 'Every 6 months'),
+    (12, 'Every 12 months'),
+]
+
+
 class Patient(SoftDeleteModel):
     user = models.OneToOneField(
         User, on_delete=models.SET_NULL, null=True, blank=True,
@@ -19,6 +27,10 @@ class Patient(SoftDeleteModel):
     insurance_id = EncryptedCharField(max_length=100, blank=True)
     allergies = EncryptedTextField(blank=True)
     medical_notes = EncryptedTextField(blank=True)
+    recall_interval_months = models.PositiveSmallIntegerField(
+        'Cleaning recall interval', choices=RECALL_INTERVAL_CHOICES, default=6,
+        help_text='How often this patient should come back for a cleaning/checkup.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta(SoftDeleteModel.Meta):

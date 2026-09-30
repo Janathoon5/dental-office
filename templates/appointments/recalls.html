@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}Recalls — Dental Office{% endblock %}
+{% block page_title %}Cleaning Recalls{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+    <div class="col-lg-4 order-lg-2">
+        <div class="card mb-4">
+            <div class="card-header fw-semibold"><i class="bi bi-envelope me-2"></i>Send Recall Emails</div>
+            <div class="card-body">
+                <p class="text-muted small">Emails every patient who is overdue or due within the next 14 days and has an email on file. Each patient gets one email per recall cycle, so clicking this again won't send duplicates.</p>
+                <form method="post" action="{% url 'send_recalls_now' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-send me-2"></i>Send Now
+                    </button>
+                </form>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="bi bi-info-circle me-2"></i>How Recalls Work</div>
+            <div class="card-body small text-muted">
+                <p>A patient's next cleaning is due a set number of months after their last <strong>completed</strong> cleaning or checkup. The default is 6 months; you can change it on each patient's edit page.</p>
+                <p>Patients who already have a cleaning or checkup booked are left off this list.</p>
+                <p class="mb-0">To send recall emails automatically, schedule <code>manage.py send_recall_reminders</code> to run once a day, the same way as appointment reminders.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8 order-lg-1">
+        <ul class="nav nav-tabs mb-0">
+            {% for key, label, count in tabs %}
+            <li class="nav-item">
+                <a class="nav-link {% if key == show %}active{% endif %}" href="?show={{ key }}">
+                    {{ label }}
+                    <span class="badge {% if key == 'overdue' and count %}bg-danger{% else %}bg-secondary{% endif %} ms-1">{{ count }}</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="card border-top-0 rounded-top-0">
+            <div class="card-body p-0">
+                {% if items %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Patient</th>
+                                <th>Phone</th>
+                                {% if show != 'never' %}
+                                <th>Last Cleaning</th>
+                                <th>Due</th>
+                                {% endif %}
+                                <th>Last Emailed</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'patient_detail' item.patient.pk %}" class="text-decoration-none fw-semibold">{{ item.patient.full_name }}</a>
+                                    {% if not item.patient.email %}<div class="small text-danger"><i class="bi bi-x-circle"></i> No email</div>{% endif %}
+                                </td>
+                                <td class="text-nowrap">{{ item.patient.phone }}</td>
+                                {% if show != 'never' %}
+                                <td class="text-nowrap">{{ item.last_hygiene|date:"M j, Y" }}</td>
+                                <td class="text-nowrap">
+                                    {{ item.due_date|date:"M j, Y" }}
+                                    {% if item.days_overdue > 0 %}
+                                    <div class="small text-danger">{{ item.days_overdue }} day{{ item.days_overdue|pluralize }} overdue</div>
+                                    {% endif %}
+                                </td>
+                                {% endif %}
+                                <td class="small text-muted text-nowrap">{{ item.last_notice.sent_at|date:"M j, Y"|default:"—" }}</td>
+                                <td class="text-end">
+                                    <a href="{% url 'appointment_add' %}?patient={{ item.patient.pk }}&type=cleaning" class="btn btn-sm btn-outline-primary text-nowrap">
+                                        <i class="bi bi-calendar-plus"></i> Book
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-check2-circle" style="font-size:2rem;"></i>
+                    <p class="mt-2 mb-0">Nobody here. Everyone's on track.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

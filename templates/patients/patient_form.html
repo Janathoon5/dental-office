@@ -59,6 +59,15 @@
                     <label class="form-label fw-semibold">Medical Notes</label>
                     <textarea name="medical_notes" rows="3" class="form-control">{{ form.medical_notes.value|default:'' }}</textarea>
                 </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Cleaning Recall</label>
+                    <select name="recall_interval_months" class="form-select">
+                        {% for value, label in form.fields.recall_interval_months.choices %}
+                        <option value="{{ value }}" {% if value|stringformat:"s" == form.recall_interval_months.value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">How often this patient should come back for a cleaning. Most patients: every 6 months.</div>
+                </div>
             </div>
 
             <div class="mt-4 d-flex gap-2">

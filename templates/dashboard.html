@@ -56,6 +56,18 @@
             </div>
         </div>
     </div>
+    <div class="col-sm-6 col-xl">
+        <a href="{% url 'recall_list' %}" class="text-decoration-none">
+        <div class="card h-100" style="border-left:4px solid {% if overdue_recalls > 0 %}#dc3545{% else %}#1a3a5c{% endif %};">
+            <div class="card-body">
+                <div class="text-muted small mb-1">Overdue Cleanings</div>
+                <div class="fs-2 fw-bold {% if overdue_recalls > 0 %}text-danger{% else %}text-dark{% endif %}">
+                    {{ overdue_recalls }}
+                </div>
+            </div>
+        </div>
+        </a>
+    </div>
 </div>
 
 <div class="card">

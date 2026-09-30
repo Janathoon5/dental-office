@@ -101,6 +101,9 @@
         <a href="{% url 'reminders_dashboard' %}" class="nav-link {% if 'reminder' in request.resolver_match.url_name %}active{% endif %}">
             <i class="bi bi-bell"></i> Reminders
         </a>
+        <a href="{% url 'recall_list' %}" class="nav-link {% if 'recall' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-arrow-repeat"></i> Recalls
+        </a>
         <a href="{% url 'invoice_list' %}" class="nav-link {% if 'invoice' in request.resolver_match.url_name %}active{% endif %}">
             <i class="bi bi-receipt"></i> Billing
         </a>

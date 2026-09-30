@@ -8,6 +8,7 @@ class PatientForm(forms.ModelForm):
         fields = [
             'first_name', 'last_name', 'date_of_birth', 'phone', 'email',
             'address', 'insurance_provider', 'insurance_id', 'allergies', 'medical_notes',
+            'recall_interval_months',
         ]
         widgets = {
             'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
