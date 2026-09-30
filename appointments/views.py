@@ -6,7 +6,7 @@ from django_ratelimit.decorators import ratelimit
 import datetime
 import io
 from dental_office.roles import staff_required
-from .models import Appointment, AppointmentRequest, ReminderLog
+from .models import Appointment, AppointmentRequest, ReminderLog, ScheduledJobRun
 from .forms import AppointmentForm, AppointmentRequestForm
 from .recalls import recall_lists, DUE_SOON_DAYS
 
@@ -148,6 +148,7 @@ def reminders_dashboard(request):
     ).order_by('-sent_at')[:30]
 
     return render(request, 'appointments/reminders.html', {
+        'auto_emails': ScheduledJobRun.status(),
         'upcoming': upcoming,
         'recent_logs': recent_logs,
         'today': today,
@@ -189,6 +190,7 @@ def recall_list(request):
         show = 'overdue'
     tabs = [(key, label, len(lists[key])) for key, label in RECALL_TABS]
     return render(request, 'appointments/recalls.html', {
+        'auto_emails': ScheduledJobRun.status(),
         'items': lists[show],
         'show': show,
         'tabs': tabs,

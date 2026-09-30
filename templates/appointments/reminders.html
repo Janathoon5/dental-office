@@ -45,17 +45,7 @@
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header fw-semibold"><i class="bi bi-clock-history me-2"></i>Automate Daily Reminders</div>
-            <div class="card-body">
-                <p class="text-muted small mb-2">To run reminders automatically every day, schedule this command to run once daily:</p>
-                <ol class="small text-muted ps-3">
-                    <li>Command: <code>manage.py send_reminders</code></li>
-                    <li>On Railway: add a <strong>Cron Job</strong> service pointed at this project running that command.</li>
-                    <li>Running locally instead: use Windows Task Scheduler, with the action set to run your project's Python interpreter with that command, from your project folder.</li>
-                </ol>
-            </div>
-        </div>
+        {% include 'appointments/_auto_email_status.html' %}
     </div>
 
     <!-- Upcoming appointments -->

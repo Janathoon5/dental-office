@@ -116,3 +116,26 @@ class RecallNotice(models.Model):
 
     def __str__(self):
         return f"Recall for {self.patient} (due {self.due_date}) — {self.status}"
+
+
+class ScheduledJobRun(models.Model):
+    """One run of the daily email job (send_daily_emails), so staff can see
+    that automatic emails are actually going out."""
+    ran_at = models.DateTimeField(auto_now_add=True)
+    succeeded = models.BooleanField(default=True)
+    summary = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-ran_at']
+
+    def __str__(self):
+        return f"Daily emails {self.ran_at:%Y-%m-%d %H:%M} — {'ok' if self.succeeded else 'failed'}"
+
+    @classmethod
+    def status(cls):
+        """Latest run, and whether it's overdue (the job runs once a day)."""
+        from django.utils import timezone
+        import datetime
+        last = cls.objects.first()
+        overdue = last is not None and timezone.now() - last.ran_at > datetime.timedelta(hours=26)
+        return {'last': last, 'overdue': overdue}

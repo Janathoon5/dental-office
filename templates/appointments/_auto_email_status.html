@@ -1,0 +1,25 @@
+{# Expects auto_emails = ScheduledJobRun.status() #}
+{% with last=auto_emails.last %}
+<div class="card {% if not last or auto_emails.overdue or not last.succeeded %}border-warning{% endif %}">
+    <div class="card-header fw-semibold"><i class="bi bi-clock-history me-2"></i>Automatic Daily Emails</div>
+    <div class="card-body small">
+        {% if not last %}
+            <p class="mb-1 text-warning-emphasis"><i class="bi bi-exclamation-triangle me-1"></i>No automatic run recorded yet.</p>
+            <p class="text-muted mb-0">Once the daily job is set up, appointment reminders (for tomorrow) and cleaning recalls go out every morning by themselves. Until then, use the Send Now buttons.</p>
+        {% else %}
+            <p class="mb-2">
+                {% if not last.succeeded %}<span class="badge bg-danger me-1">Failed</span>
+                {% elif auto_emails.overdue %}<span class="badge bg-warning text-dark me-1">Overdue</span>
+                {% else %}<span class="badge bg-success me-1">Running</span>{% endif %}
+                Last ran {{ last.ran_at|date:"M j, g:i A" }}
+            </p>
+            <div class="text-muted" style="white-space: pre-line;">{{ last.summary }}</div>
+            {% if auto_emails.overdue %}
+            <p class="text-warning-emphasis mt-2 mb-0">It hasn't run in over a day. Check the daily-emails job in Railway.</p>
+            {% elif not last.succeeded %}
+            <p class="text-danger mt-2 mb-0">Part of the last run failed. Check the daily-emails job's logs in Railway.</p>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+{% endwith %}

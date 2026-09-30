@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Appointment, AppointmentRequest, ReminderLog, RecallNotice
+from .models import Appointment, AppointmentRequest, ReminderLog, RecallNotice, ScheduledJobRun
 
 
 @admin.register(Appointment)
@@ -26,3 +26,9 @@ class ReminderLogAdmin(admin.ModelAdmin):
 class RecallNoticeAdmin(admin.ModelAdmin):
     list_display = ['patient', 'due_date', 'sent_at', 'status', 'recipient_email']
     list_filter = ['status']
+
+
+@admin.register(ScheduledJobRun)
+class ScheduledJobRunAdmin(admin.ModelAdmin):
+    list_display = ['ran_at', 'succeeded', 'summary']
+    list_filter = ['succeeded']

@@ -18,14 +18,15 @@
                 </form>
             </div>
         </div>
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header fw-semibold"><i class="bi bi-info-circle me-2"></i>How Recalls Work</div>
             <div class="card-body small text-muted">
                 <p>A patient's next cleaning is due a set number of months after their last <strong>completed</strong> cleaning or checkup. The default is 6 months; you can change it on each patient's edit page.</p>
                 <p>Patients who already have a cleaning or checkup booked are left off this list.</p>
-                <p class="mb-0">To send recall emails automatically, schedule <code>manage.py send_recall_reminders</code> to run once a day, the same way as appointment reminders.</p>
+                <p class="mb-0">Recall emails also go out automatically each morning (see below).</p>
             </div>
         </div>
+        {% include 'appointments/_auto_email_status.html' %}
     </div>
 
     <div class="col-lg-8 order-lg-1">

@@ -230,3 +230,75 @@ class RecallTests(TestCase):
         self.assertContains(self.client.get(reverse('recall_list')), 'Overdue Test')
         self.assertContains(self.client.get(reverse('patient_detail', args=[p.pk])), 'Overdue')
         self.assertContains(self.client.get(reverse('dashboard')), 'Overdue Cleanings')
+
+
+class DailyEmailJobTests(TestCase):
+    """send_daily_emails is what the Railway cron service runs every morning."""
+
+    def setUp(self):
+        from django.utils import timezone
+        today = timezone.localdate()
+        tomorrow_patient = Patient.objects.create(first_name='Tomorrow', last_name='Test', phone='1',
+                                                  date_of_birth=datetime.date(1990, 1, 1), email='t@example.com')
+        Appointment.objects.create(patient=tomorrow_patient, date=today + datetime.timedelta(days=1),
+                                   start_time=datetime.time(9, 0))
+        overdue_patient = Patient.objects.create(first_name='Overdue', last_name='Test', phone='2',
+                                                 date_of_birth=datetime.date(1990, 1, 1), email='o@example.com')
+        Appointment.objects.create(patient=overdue_patient, date=today - datetime.timedelta(days=250),
+                                   start_time=datetime.time(9, 0), status='completed', appointment_type='cleaning')
+
+    def test_sends_reminders_and_recalls_once_and_records_the_run(self):
+        from django.core import mail
+        from django.core.management import call_command
+        from .models import ScheduledJobRun
+
+        call_command('send_daily_emails', stdout=io.StringIO())
+        self.assertEqual(sorted(m.to[0] for m in mail.outbox), ['o@example.com', 't@example.com'])
+        run = ScheduledJobRun.objects.get()
+        self.assertTrue(run.succeeded)
+        self.assertEqual(run.summary, 'Appointment reminders: 1 sent, 0 already sent, 0 without an email address, 0 failed\n'
+                                      'Cleaning recalls: 1 sent, 0 already sent, 0 without an email address, 0 failed')
+
+        # Running again the same day sends nothing new.
+        call_command('send_daily_emails', stdout=io.StringIO())
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(ScheduledJobRun.objects.count(), 2)
+
+    def test_one_failing_job_does_not_stop_the_other(self):
+        from unittest import mock
+        from django.core import mail
+        from django.core.management import CommandError, call_command
+        from django.core.management import call_command as real_call_command
+        from .models import ScheduledJobRun
+
+        def fake(name, *args, **kwargs):
+            if name == 'send_reminders':
+                raise RuntimeError('boom')
+            return real_call_command(name, *args, **kwargs)
+
+        with mock.patch('appointments.management.commands.send_daily_emails.call_command', side_effect=fake):
+            with self.assertRaises(CommandError):
+                call_command('send_daily_emails', stdout=io.StringIO())
+        run = ScheduledJobRun.objects.get()
+        self.assertFalse(run.succeeded)
+        self.assertIn('Appointment reminders: FAILED (boom)', run.summary)
+        self.assertEqual([m.to[0] for m in mail.outbox], ['o@example.com'])
+
+    def test_status_card_shows_last_run_and_overdue(self):
+        from django.utils import timezone
+        from .models import ScheduledJobRun
+        staff = User.objects.create_user(username='desk', password='testpass123')
+        StaffProfile.objects.create(user=staff, role='receptionist')
+        TOTPDevice.objects.create(user=staff, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        self.client.force_login(staff)
+
+        for url in (reverse('reminders_dashboard'), reverse('recall_list')):
+            self.assertContains(self.client.get(url), 'No automatic run recorded yet')
+
+        run = ScheduledJobRun.objects.create(summary='Cleaning recalls: Recall emails: 3 sent')
+        page = self.client.get(reverse('reminders_dashboard'))
+        self.assertContains(page, 'Running')
+        self.assertContains(page, '3 sent')
+
+        ScheduledJobRun.objects.filter(pk=run.pk).update(ran_at=timezone.now() - datetime.timedelta(hours=30))
+        self.assertContains(self.client.get(reverse('recall_list')), "hasn't run in over a day")
