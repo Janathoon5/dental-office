@@ -7,6 +7,7 @@ class BillingConfig(AppConfig):
 
     def ready(self):
         from auditlog.registry import auditlog
-        from .models import Invoice, Payment
+        from .models import ClaimDenial, Invoice, Payment
         auditlog.register(Invoice)
         auditlog.register(Payment)
+        auditlog.register(ClaimDenial)

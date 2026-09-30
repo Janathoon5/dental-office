@@ -107,6 +107,9 @@
         <a href="{% url 'invoice_list' %}" class="nav-link {% if 'invoice' in request.resolver_match.url_name %}active{% endif %}">
             <i class="bi bi-receipt"></i> Billing
         </a>
+        <a href="{% url 'denial_list' %}" class="nav-link {% if 'denial' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-shield-x"></i> Denials
+        </a>
         <a href="{% url 'supply_list' %}" class="nav-link {% if 'supply' in request.resolver_match.url_name %}active{% endif %}">
             <i class="bi bi-box-seam"></i> Inventory
         </a>

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from dental_office.mixins import SoftDeleteAdminMixin
-from .models import Invoice, Payment
+from .models import ClaimDenial, Invoice, Payment, OfficeSettings
 
 
 class PaymentInline(admin.TabularInline):
@@ -19,3 +19,21 @@ class InvoiceAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_filter = ['status']
     search_fields = ['patient__first_name', 'patient__last_name']
     inlines = [PaymentInline]
+
+
+@admin.register(OfficeSettings)
+class OfficeSettingsAdmin(admin.ModelAdmin):
+    """Single-row letterhead settings: can't add a second row or delete it."""
+
+    def has_add_permission(self, request):
+        return not OfficeSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ClaimDenial)
+class ClaimDenialAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
+    list_display = ['pk', 'invoice', 'insurer_name', 'status', 'appeal_deadline', 'ai_status', 'created_at', 'is_active']
+    list_filter = ['status', 'ai_status']
+    search_fields = ['invoice__patient__first_name', 'invoice__patient__last_name', 'claim_number']

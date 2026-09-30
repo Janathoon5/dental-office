@@ -7,4 +7,10 @@ urlpatterns = [
     path('<int:pk>/', views.invoice_detail, name='invoice_detail'),
     path('<int:pk>/edit/', views.invoice_edit, name='invoice_edit'),
     path('<int:invoice_pk>/payments/add/', views.payment_add, name='payment_add'),
+    path('<int:invoice_pk>/denials/upload/', views.denial_upload, name='denial_upload'),
+    path('denials/', views.denial_list, name='denial_list'),
+    path('denials/<int:pk>/', views.denial_detail, name='denial_detail'),
+    path('denials/<int:pk>/retry/', views.denial_retry, name='denial_retry'),
+    path('denials/<int:pk>/letter/', views.denial_letter_file, name='denial_letter_file'),
+    path('denials/<int:pk>/print/', views.denial_print, name='denial_print'),
 ]

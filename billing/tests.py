@@ -1,12 +1,19 @@
 import datetime
+import json
+import shutil
+import tempfile
+from types import SimpleNamespace
+from unittest import mock
 
 from django.contrib.auth.models import Group, User
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from patients.models import Patient
+from clinical.models import ToothCondition, TreatmentRecord
+from patients.models import MedicalAlert, Patient
 from staff.models import StaffProfile, TOTPDevice
-from .models import Invoice
+from .models import ClaimDenial, Invoice, OfficeSettings
 
 
 class BillingAccessControlTests(TestCase):
@@ -54,3 +61,215 @@ class BillingAccessControlTests(TestCase):
                     reverse('invoice_edit', args=[self.invoice.pk])):
             response = self.client.get(url)
             self.assertEqual(response.status_code, 200, f'{url} should be reachable by staff')
+
+
+AI_RESULT = {
+    'insurer_name': 'Delta Test Dental',
+    'claim_number': 'CLM-123',
+    'denial_codes': 'N30, 96',
+    'amount_denied': '$1,150.00',
+    'appeal_deadline': '2026-12-01',
+    'summary': 'The crown on #14 was denied as not medically necessary.',
+    'denial_reason': 'Insufficient documentation of necessity.',
+    'recommendation': 'appeal',
+    'recommendation_reason': 'Records show a fractured cusp.',
+    'checklist': [{'item': 'Pre-op X-ray of #14', 'why': 'Shows the fracture', 'on_file': True}],
+    'warnings': ['Member ID on the letter differs from the chart.'],
+    'letter': 'Dear Claims Reviewer,\n[DENTIST TO CONFIRM: fracture size]\nSincerely,',
+}
+
+
+def fake_response(payload=AI_RESULT, stop_reason='end_turn', content=None):
+    if content is None:
+        content = [SimpleNamespace(type='text', text=json.dumps(payload))]
+    return SimpleNamespace(stop_reason=stop_reason, content=content)
+
+
+def mock_claude(response):
+    """Patch the Anthropic client so .beta.messages.stream(...) returns `response`.
+    The returned mock records the kwargs the app sent."""
+    client = mock.MagicMock()
+    stream_cm = client.beta.messages.stream.return_value
+    stream_cm.__enter__.return_value.get_final_message.return_value = response
+    return mock.patch('billing.ai.anthropic.Anthropic', return_value=client), client
+
+
+class ClaimDenialTests(TestCase):
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.media, ignore_errors=True)
+        media_override = override_settings(MEDIA_ROOT=self.media, ANTHROPIC_API_KEY='test-key', AI_PHI_ALLOWED=False)
+        media_override.enable()
+        self.addCleanup(media_override.disable)
+
+        self.patient = Patient.objects.create(
+            first_name='Test', last_name='Patient', date_of_birth=datetime.date(1980, 5, 5),
+            phone='555-0000', insurance_provider='Delta Test Dental', insurance_id='M-999',
+        )
+        self.invoice = Invoice.objects.create(patient=self.patient, subtotal=1500, insurance_amount=1150)
+        self.staff = User.objects.create_user(username='frontdesk', password='testpass123')
+        StaffProfile.objects.create(user=self.staff, role='receptionist')
+        TOTPDevice.objects.create(user=self.staff, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        self.client.force_login(self.staff)
+
+    def _upload(self, name='letter.pdf', content=b'%PDF-1.4 fake', confirm=True, **extra):
+        data = {'letter': SimpleUploadedFile(name, content)}
+        if confirm:
+            data['confirm_no_phi'] = 'on'
+        return self.client.post(reverse('denial_upload', args=[self.invoice.pk]), data, **extra)
+
+    def test_demo_mode_requires_no_phi_confirmation(self):
+        patcher, _ = mock_claude(fake_response())
+        with patcher:
+            self._upload(confirm=False)
+        self.assertFalse(ClaimDenial.objects.exists())
+
+    @override_settings(AI_PHI_ALLOWED=True)
+    def test_confirmation_not_needed_once_phi_is_allowed(self):
+        patcher, _ = mock_claude(fake_response())
+        with patcher:
+            self._upload(confirm=False)
+        self.assertEqual(ClaimDenial.objects.count(), 1)
+
+    def test_upload_runs_analysis_and_saves_result(self):
+        patcher, _ = mock_claude(fake_response())
+        with patcher:
+            response = self._upload()
+        denial = ClaimDenial.objects.get()
+        self.assertRedirects(response, reverse('denial_detail', args=[denial.pk]))
+        self.assertEqual(denial.ai_status, 'done')
+        self.assertEqual(denial.created_by, self.staff)
+        self.assertEqual(denial.insurer_name, 'Delta Test Dental')
+        self.assertEqual(str(denial.amount_denied), '1150.00')
+        self.assertEqual(denial.appeal_deadline, datetime.date(2026, 12, 1))
+        self.assertEqual(denial.recommendation, 'appeal')
+        self.assertEqual(denial.checklist[0]['on_file'], True)
+
+        page = self.client.get(reverse('denial_detail', args=[denial.pk]))
+        self.assertContains(page, 'fractured cusp')
+        self.assertContains(page, 'Member ID on the letter differs')
+        self.assertContains(page, 'fill in the <strong>1</strong>')
+        self.assertContains(page, 'Demo mode')
+
+    def test_request_includes_letter_and_patient_records(self):
+        MedicalAlert.objects.create(patient=self.patient, alert_type='condition', description='Type 2 diabetes')
+        ToothCondition.objects.create(patient=self.patient, tooth_number=14, condition='decay', notes='fractured cusp')
+        TreatmentRecord.objects.create(patient=self.patient, date=datetime.date.today(), procedure='Crown prep', tooth_number='14')
+        OfficeSettings.objects.create(pk=1, office_name='Bright Smiles Dental', npi='1234567890')
+
+        patcher, client = mock_claude(fake_response())
+        with patcher:
+            self._upload()
+        kwargs = client.beta.messages.stream.call_args.kwargs
+        self.assertEqual(kwargs['model'], 'claude-opus-5-5')
+        self.assertEqual(kwargs['fallbacks'], 'default')
+        self.assertEqual(kwargs['output_config']['format']['type'], 'json_schema')
+        letter_block, text_block = kwargs['messages'][0]['content']
+        self.assertEqual(letter_block['type'], 'document')
+        self.assertEqual(letter_block['source']['media_type'], 'application/pdf')
+        for expected in ('Type 2 diabetes', '#14 Upper left first molar: Decay / Cavity (fractured cusp)',
+                         'Crown prep, tooth 14', 'Bright Smiles Dental', '1234567890', 'M-999',
+                         'None uploaded to the app.'):
+            self.assertIn(expected, text_block['text'])
+
+    def test_photos_are_sent_as_images(self):
+        patcher, client = mock_claude(fake_response())
+        with patcher:
+            self._upload(name='letter.JPG', content=b'\xff\xd8fakejpeg')
+        block = client.beta.messages.stream.call_args.kwargs['messages'][0]['content'][0]
+        self.assertEqual((block['type'], block['source']['media_type']), ('image', 'image/jpeg'))
+
+    def test_unsupported_file_type_is_rejected(self):
+        patcher, client = mock_claude(fake_response())
+        with patcher:
+            self._upload(name='letter.docx')
+        self.assertFalse(ClaimDenial.objects.exists())
+        client.beta.messages.stream.assert_not_called()
+
+    @override_settings(ANTHROPIC_API_KEY='')
+    def test_missing_api_key_fails_with_setup_instructions(self):
+        self._upload()
+        denial = ClaimDenial.objects.get()
+        self.assertEqual(denial.ai_status, 'failed')
+        self.assertIn('ANTHROPIC_API_KEY', denial.ai_error)
+        self.assertContains(self.client.get(reverse('denial_detail', args=[denial.pk])), 'Try again')
+
+    def test_refusal_is_reported_not_parsed(self):
+        patcher, _ = mock_claude(fake_response(stop_reason='refusal', content=[]))
+        with patcher:
+            self._upload()
+        denial = ClaimDenial.objects.get()
+        self.assertEqual(denial.ai_status, 'failed')
+        self.assertIn('declined', denial.ai_error)
+
+    def test_only_text_after_a_fallback_switch_is_used(self):
+        content = [
+            SimpleNamespace(type='text', text='{"partial": '),
+            SimpleNamespace(type='fallback'),
+            SimpleNamespace(type='text', text=json.dumps(AI_RESULT)),
+        ]
+        patcher, _ = mock_claude(fake_response(content=content))
+        with patcher:
+            self._upload()
+        self.assertEqual(ClaimDenial.objects.get().ai_status, 'done')
+
+    def test_staff_can_edit_status_deadline_and_letter(self):
+        patcher, _ = mock_claude(fake_response())
+        with patcher:
+            self._upload()
+        denial = ClaimDenial.objects.get()
+        self.client.post(reverse('denial_detail', args=[denial.pk]), {
+            'status': 'appealed', 'appeal_deadline': '2026-11-15', 'appeal_letter': 'Edited letter',
+        })
+        denial.refresh_from_db()
+        self.assertEqual((denial.status, denial.appeal_deadline, denial.appeal_letter),
+                         ('appealed', datetime.date(2026, 11, 15), 'Edited letter'))
+        self.assertContains(self.client.get(reverse('denial_print', args=[denial.pk])), 'Edited letter')
+
+    def test_retry_reruns_analysis(self):
+        with override_settings(ANTHROPIC_API_KEY=''):
+            self._upload()
+        denial = ClaimDenial.objects.get()
+        patcher, _ = mock_claude(fake_response())
+        with patcher:
+            self.client.post(reverse('denial_retry', args=[denial.pk]))
+        denial.refresh_from_db()
+        self.assertEqual(denial.ai_status, 'done')
+
+    def test_stuck_analysis_is_detected(self):
+        denial = ClaimDenial.objects.create(invoice=self.invoice, letter='denials/x.pdf', ai_status='processing')
+        from django.utils import timezone
+        denial.ai_started_at = timezone.now() - datetime.timedelta(minutes=11)
+        self.assertTrue(denial.ai_is_stuck)
+        denial.ai_started_at = timezone.now()
+        self.assertFalse(denial.ai_is_stuck)
+
+    def test_list_shows_open_denials_soonest_deadline_first(self):
+        later = ClaimDenial.objects.create(invoice=self.invoice, letter='a.pdf', ai_status='done',
+                                           insurer_name='Later Ins', appeal_deadline=datetime.date(2027, 1, 1))
+        sooner = ClaimDenial.objects.create(invoice=self.invoice, letter='b.pdf', ai_status='done',
+                                            insurer_name='Sooner Ins', appeal_deadline=datetime.date(2026, 11, 1))
+        ClaimDenial.objects.create(invoice=self.invoice, letter='c.pdf', ai_status='done',
+                                   insurer_name='Closed Ins', status='approved')
+        response = self.client.get(reverse('denial_list'))
+        self.assertEqual([d.pk for d in response.context['denials']], [sooner.pk, later.pk])
+        self.assertNotContains(response, 'Closed Ins')
+        self.assertContains(self.client.get(reverse('denial_list'), {'show': 'closed'}), 'Closed Ins')
+
+    def test_original_letter_is_served_to_staff_only(self):
+        patcher, _ = mock_claude(fake_response())
+        with patcher:
+            self._upload(content=b'%PDF-1.4 secret')
+        denial = ClaimDenial.objects.get()
+        response = self.client.get(reverse('denial_letter_file', args=[denial.pk]))
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertEqual(b''.join(response.streaming_content), b'%PDF-1.4 secret')
+
+        patient_user = User.objects.create_user(username='pt', password='testpass123')
+        patient_user.groups.add(Group.objects.get_or_create(name='Patient')[0])
+        self.client.force_login(patient_user)
+        for name in ('denial_detail', 'denial_letter_file', 'denial_print', 'denial_retry'):
+            self.assertEqual(self.client.get(reverse(name, args=[denial.pk])).status_code, 302, name)
+        self.assertEqual(self.client.get(reverse('denial_list')).status_code, 302)
+        self._upload()
+        self.assertEqual(ClaimDenial.objects.count(), 1)

@@ -268,6 +268,16 @@ ANYMAIL = {
     'RESEND_API_KEY': config('RESEND_API_KEY', default=''),
 }
 
+# AI insurance-denial helper (billing/ai.py). Without a key, uploads still work
+# but the analysis fails with a message explaining how to set it up.
+ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
+# Sending PHI to Anthropic requires a signed BAA. Until then this stays False:
+# the app shows a demo-mode warning and staff must confirm each uploaded letter
+# contains no real patient information.
+AI_PHI_ALLOWED = config('AI_PHI_ALLOWED', default=False, cast=bool)
+# Analysis takes 30-90s, so it runs in a background thread; tests run it inline.
+ANALYZE_DENIALS_IN_BACKGROUND = 'test' not in sys.argv
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 

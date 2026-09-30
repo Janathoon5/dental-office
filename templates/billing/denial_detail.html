@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}Insurance Denial — {{ denial.invoice.patient.full_name }}{% endblock %}
+{% block page_title %}Insurance Denial: {{ denial.invoice.patient.full_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <a href="{% url 'invoice_detail' denial.invoice.pk %}" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Invoice #{{ denial.invoice.pk }}</a>
+    <a href="{% url 'denial_letter_file' denial.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-text me-1"></i>View original letter</a>
+</div>
+
+{% include 'billing/_ai_demo_warning.html' %}
+
+{% if denial.ai_status == 'processing' and not denial.ai_is_stuck %}
+<meta http-equiv="refresh" content="5">
+<div class="card">
+    <div class="card-body text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <h5>Reading the letter…</h5>
+        <p class="text-muted mb-0">The AI is reviewing the denial against {{ denial.invoice.patient.first_name }}'s records. This usually takes about a minute; the page will update by itself.</p>
+    </div>
+</div>
+
+{% elif denial.ai_status != 'done' %}
+<div class="alert alert-danger d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <span>
+        <i class="bi bi-x-octagon me-1"></i>
+        {% if denial.ai_is_stuck %}The analysis didn't finish (the server may have restarted).{% else %}{{ denial.ai_error }}{% endif %}
+    </span>
+    <form method="post" action="{% url 'denial_retry' denial.pk %}">
+        {% csrf_token %}
+        <button class="btn btn-sm btn-light"><i class="bi bi-arrow-clockwise me-1"></i>Try again</button>
+    </form>
+</div>
+
+{% else %}
+{% if denial.warnings %}
+<div class="alert alert-warning">
+    <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Check before sending</div>
+    <ul class="mb-0 small">
+        {% for w in denial.warnings %}<li>{{ w }}</li>{% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card mb-3">
+            <div class="card-header fw-semibold"><i class="bi bi-info-circle me-2"></i>What Happened</div>
+            <div class="card-body">
+                <p>{{ denial.summary }}</p>
+                <dl class="row small mb-0">
+                    <dt class="col-5 text-muted">Insurer</dt><dd class="col-7">{{ denial.insurer_name|default:"—" }}</dd>
+                    <dt class="col-5 text-muted">Claim #</dt><dd class="col-7">{{ denial.claim_number|default:"—" }}</dd>
+                    <dt class="col-5 text-muted">Denial codes</dt><dd class="col-7">{{ denial.denial_codes|default:"—" }}</dd>
+                    <dt class="col-5 text-muted">Amount denied</dt><dd class="col-7">{% if denial.amount_denied is not None %}${{ denial.amount_denied }}{% else %}—{% endif %}</dd>
+                    <dt class="col-5 text-muted">Insurer's reason</dt><dd class="col-7">{{ denial.denial_reason|default:"—" }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header fw-semibold"><i class="bi bi-signpost-split me-2"></i>Recommended Next Step</div>
+            <div class="card-body">
+                <span class="badge fs-6 mb-2 {% if denial.recommendation == 'appeal' %}bg-primary{% elif denial.recommendation == 'resubmit' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                    {{ denial.get_recommendation_display }}
+                </span>
+                <p class="mb-0 small">{{ denial.recommendation_reason }}</p>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header fw-semibold"><i class="bi bi-paperclip me-2"></i>Documents to Include</div>
+            <ul class="list-group list-group-flush">
+                {% for c in denial.checklist %}
+                <li class="list-group-item small">
+                    {% if c.on_file %}
+                        <i class="bi bi-check-circle-fill text-success me-1" title="In the app"></i>
+                    {% else %}
+                        <i class="bi bi-exclamation-circle-fill text-warning me-1" title="Needs to be gathered"></i>
+                    {% endif %}
+                    <span class="fw-semibold">{{ c.item }}</span>
+                    <div class="text-muted ms-4">{{ c.why }}{% if not c.on_file %} <em>(not found in the app — gather this)</em>{% endif %}</div>
+                </li>
+                {% empty %}
+                <li class="list-group-item small text-muted">No attachments suggested.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <form method="post" class="card">
+            {% csrf_token %}
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-envelope-paper me-2"></i>{% if denial.recommendation == 'resubmit' %}Cover Letter Draft{% else %}Appeal Letter Draft{% endif %}</span>
+                <a href="{% url 'denial_print' denial.pk %}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-printer me-1"></i>Print</a>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold small" for="id_status">Claim status</label>
+                        <select name="status" id="id_status" class="form-select">
+                            {% for value, label in form.fields.status.choices %}
+                            <option value="{{ value }}" {% if value == form.status.value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label fw-semibold small" for="id_appeal_deadline">Response deadline</label>
+                        <input type="date" name="appeal_deadline" id="id_appeal_deadline" class="form-control" value="{{ denial.appeal_deadline|date:'Y-m-d' }}">
+                        {% with days=denial.days_until_deadline %}
+                        {% if days is None %}
+                            <div class="form-text">Not stated in the letter. Check the insurer's policy (often 90–180 days).</div>
+                        {% elif days < 0 %}
+                            <div class="form-text text-danger fw-semibold">Deadline passed {{ days|stringformat:"d"|slice:"1:" }} day{{ days|pluralize }} ago</div>
+                        {% else %}
+                            <div class="form-text {% if days <= 14 %}text-danger fw-semibold{% endif %}">{{ days }} day{{ days|pluralize }} left</div>
+                        {% endif %}
+                        {% endwith %}
+                    </div>
+                </div>
+
+                <div class="alert alert-light border small py-2">
+                    <i class="bi bi-stars me-1"></i>AI-written draft. Read every fact before sending{% if placeholder_count %}, and fill in the <strong>{{ placeholder_count }}</strong> [BRACKETED] item{{ placeholder_count|pluralize }}{% endif %}.
+                </div>
+                <textarea name="appeal_letter" rows="24" class="form-control font-monospace small">{{ form.appeal_letter.value|default:'' }}</textarea>
+                {% for e in form.errors.values %}<div class="text-danger small mt-2">{{ e|join:" " }}</div>{% endfor %}
+            </div>
+            <div class="card-footer d-flex flex-wrap justify-content-between gap-2">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save</button>
+                <button type="submit" form="retryForm" class="btn btn-outline-secondary" onclick="return confirm('Re-run the AI? This replaces the letter draft and any edits you saved.')">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Re-run AI
+                </button>
+            </div>
+        </form>
+        <form method="post" action="{% url 'denial_retry' denial.pk %}" id="retryForm">{% csrf_token %}</form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

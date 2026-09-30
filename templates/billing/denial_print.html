@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Letter — {{ denial.invoice.patient.full_name }}</title>
+    <style>
+        body { font-family: Georgia, 'Times New Roman', serif; color: #111; max-width: 7.5in; margin: 0.6in auto; padding: 0 0.4in; font-size: 12pt; line-height: 1.45; }
+        .letterhead { border-bottom: 2px solid #1a3a5c; padding-bottom: 0.6em; margin-bottom: 1.6em; }
+        .letterhead .name { font-size: 18pt; font-weight: bold; color: #1a3a5c; }
+        .letterhead .details { font-size: 10pt; color: #444; }
+        .letter { white-space: pre-wrap; }
+        .toolbar { font-family: system-ui, sans-serif; background: #fff8e1; border: 1px solid #f0c24b; border-radius: 6px; padding: 0.6em 1em; margin-bottom: 1.5em; display: flex; justify-content: space-between; align-items: center; gap: 1em; font-size: 10pt; }
+        .toolbar button { font-size: 11pt; padding: 0.35em 1em; cursor: pointer; }
+        @media print { .toolbar { display: none; } body { margin: 0; } }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <span>Check the letter and fill in any [BRACKETED] items before printing. Edit it on the previous page.</span>
+        <button onclick="window.print()">Print</button>
+    </div>
+    <div class="letterhead">
+        <div class="name">{{ office.office_name|default:"[OFFICE NAME]" }}</div>
+        <div class="details">
+            {{ office.address|default:"[OFFICE ADDRESS]"|linebreaksbr }}<br>
+            {% if office.phone %}Phone: {{ office.phone }}{% endif %}{% if office.phone and office.email %} · {% endif %}{% if office.email %}{{ office.email }}{% endif %}
+            {% if office.npi %}<br>NPI: {{ office.npi }}{% endif %}{% if office.tax_id %} · TIN: {{ office.tax_id }}{% endif %}
+        </div>
+    </div>
+    <div class="letter">{{ denial.appeal_letter }}</div>
+</body>
+</html>

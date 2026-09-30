@@ -50,6 +50,47 @@
                 {% if invoice.notes %}<hr><p class="text-muted small mb-0">{{ invoice.notes }}</p>{% endif %}
             </div>
         </div>
+
+        <!-- Insurance denials -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-shield-x me-2"></i>Insurance Denials</span>
+                <span class="badge bg-light text-dark border"><i class="bi bi-stars"></i> AI assist</span>
+            </div>
+            <div class="card-body">
+                {% if denials %}
+                <ul class="list-unstyled mb-3">
+                    {% for d in denials %}
+                    <li class="d-flex justify-content-between align-items-center border-bottom py-2">
+                        <a href="{% url 'denial_detail' d.pk %}" class="text-decoration-none">
+                            {{ d.insurer_name|default:"Denial letter" }}
+                            <span class="text-muted small">· uploaded {{ d.created_at|date:"M j" }}</span>
+                        </a>
+                        {% if d.ai_status == 'processing' %}
+                            <span class="badge bg-info text-dark">Analyzing…</span>
+                        {% else %}
+                            <span class="badge {% if d.is_open %}bg-warning text-dark{% elif d.status == 'approved' %}bg-success{% else %}bg-secondary{% endif %}">{{ d.get_status_display }}</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                <p class="small text-muted">Got a denial or EOB from the insurance company? Upload it and the AI will explain it, suggest whether to appeal or resubmit, and draft the letter.</p>
+                {% include 'billing/_ai_demo_warning.html' %}
+                <form method="post" action="{% url 'denial_upload' invoice.pk %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="file" name="letter" class="form-control mb-2" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,image/*" required>
+                    <div class="form-text mb-2">PDF, or a photo/scan of a paper letter. Max 20 MB.</div>
+                    {% if not ai_phi_allowed %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="confirm_no_phi" id="confirmNoPhi" required>
+                        <label class="form-check-label small" for="confirmNoPhi">{{ denial_form.confirm_no_phi.label }}</label>
+                    </div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary w-100"><i class="bi bi-stars me-1"></i>Analyze Denial Letter</button>
+                </form>
+            </div>
+        </div>
     </div>
 
     <div class="col-lg-7">
