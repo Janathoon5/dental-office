@@ -270,7 +270,9 @@ ANYMAIL = {
 
 # AI insurance-denial helper (billing/ai.py). Without a key, uploads still work
 # but the analysis fails with a message explaining how to set it up.
-ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
+# .strip(): a key pasted into a hosting dashboard easily picks up a trailing
+# newline, which HTTP rejects as an illegal header value.
+ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='').strip()
 # Sending PHI to Anthropic requires a signed BAA. Until then this stays False:
 # the app shows a demo-mode warning and staff must confirm each uploaded letter
 # contains no real patient information.
