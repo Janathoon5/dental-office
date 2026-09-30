@@ -35,7 +35,9 @@
                         <td>
                             {% if d.ai_status == 'processing' %}<span class="badge bg-info text-dark">Analyzing…</span>
                             {% elif d.ai_status == 'failed' %}<span class="badge bg-danger">AI failed</span>
-                            {% else %}{{ d.get_recommendation_display|default:"—" }}{% endif %}
+                            {% else %}{{ d.get_recommendation_display|default:"—" }}
+                                {% if d.open_item_count %}<div><span class="badge bg-warning text-dark">{{ d.open_item_count }} to confirm</span></div>{% endif %}
+                            {% endif %}
                         </td>
                         <td><span class="small">{{ d.get_status_display }}</span></td>
                         <td class="text-nowrap">

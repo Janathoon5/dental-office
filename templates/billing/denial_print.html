@@ -1,4 +1,4 @@
-<!doctype html>
+{% load denial_tags %}<!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -11,7 +11,8 @@
         .letter { white-space: pre-wrap; }
         .toolbar { font-family: system-ui, sans-serif; background: #fff8e1; border: 1px solid #f0c24b; border-radius: 6px; padding: 0.6em 1em; margin-bottom: 1.5em; display: flex; justify-content: space-between; align-items: center; gap: 1em; font-size: 10pt; }
         .toolbar button { font-size: 11pt; padding: 0.35em 1em; cursor: pointer; }
-        @media print { .toolbar { display: none; } body { margin: 0; } }
+        mark.ph { background: #fff3bf; outline: 1px solid #f0c24b; }
+        @media print { .toolbar { display: none; } body { margin: 0; } mark.ph { background: none; outline: none; } }
     </style>
 </head>
 <body>
@@ -27,6 +28,6 @@
             {% if office.npi %}<br>NPI: {{ office.npi }}{% endif %}{% if office.tax_id %} · TIN: {{ office.tax_id }}{% endif %}
         </div>
     </div>
-    <div class="letter">{{ denial.appeal_letter }}</div>
+    <div class="letter">{{ denial.appeal_letter|highlight_placeholders }}</div>
 </body>
 </html>

@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% block title %}Review Checklist — {{ denial.invoice.patient.full_name }}{% endblock %}
+{% block page_title %}Review Checklist: {{ denial.invoice.patient.full_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'denial_detail' denial.pk %}" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Back to the denial</a>
+</div>
+
+{% include 'billing/_ai_demo_warning.html' %}
+
+{% if not groups %}
+<div class="card"><div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-check2-circle text-success" style="font-size:2rem;"></i>
+    <p class="mt-2 mb-0">Nothing left to confirm. The letter is ready to review and print.</p>
+</div></div>
+{% else %}
+<form method="post" id="reviewForm">
+    {% csrf_token %}
+    <div class="alert alert-light border d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span class="small">
+            Answer what you can. The AI will work your answers into the letter and change nothing else.
+            Anything left blank stays highlighted in the letter for later.
+        </span>
+        <span class="fw-semibold small text-nowrap"><span id="doneCount">0</span> of {{ item_count }} done</span>
+    </div>
+
+    {% for key, label, items in groups %}
+    <div class="card mb-4 review-group review-{{ key }}">
+        <div class="card-header fw-semibold">
+            {% if key == 'dentist' %}<i class="bi bi-person-badge me-2"></i>{% elif key == 'attach' %}<i class="bi bi-paperclip me-2"></i>{% else %}<i class="bi bi-clipboard-check me-2"></i>{% endif %}
+            {{ label }}
+            <span class="badge bg-light text-dark border ms-1">{{ items|length }}</span>
+            {% if key == 'dentist' and not can_answer_clinical %}
+            <div class="small fw-normal text-muted mt-1"><i class="bi bi-lock me-1"></i>Only a dentist can answer these, because they're clinical statements made to the insurer.</div>
+            {% endif %}
+        </div>
+        <ul class="list-group list-group-flush">
+            {% for item in items %}
+            <li class="list-group-item review-item" data-category="{{ item.category }}">
+                <input type="hidden" name="ph_{{ item.index }}" value="{{ item.placeholder }}">
+                <div class="d-flex gap-2 align-items-start">
+                    <i class="bi bi-circle text-muted status-icon mt-1"></i>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold">{{ item.question|capfirst }}</div>
+                        <div class="small text-muted mb-2">In the letter: <mark class="ph ph-{{ item.category }}">{{ item.placeholder }}</mark></div>
+
+                        {% if item.category == 'attach' %}
+                        <div class="d-flex flex-wrap gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input attach-choice" type="checkbox" name="attach_{{ item.index }}" id="attach_{{ item.index }}" {% if item.previous and not item.previous.remove %}checked{% endif %}>
+                                <label class="form-check-label" for="attach_{{ item.index }}">I'll attach this</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input remove-choice" type="checkbox" name="remove_{{ item.index }}" id="remove_{{ item.index }}" {% if item.previous.remove %}checked{% endif %}>
+                                <label class="form-check-label" for="remove_{{ item.index }}">Not available, remove it from the letter</label>
+                            </div>
+                        </div>
+                        {% else %}
+                        <textarea name="answer_{{ item.index }}" rows="2" class="form-control mb-2 answer-box"
+                            placeholder="{% if item.locked %}Waiting for the dentist{% else %}Your answer{% endif %}"
+                            {% if item.locked %}disabled{% endif %}>{{ item.previous.answer|default:'' }}</textarea>
+                        <div class="form-check">
+                            <input class="form-check-input remove-choice" type="checkbox" name="remove_{{ item.index }}" id="remove_{{ item.index }}" {% if item.previous.remove %}checked{% endif %} {% if item.locked %}disabled{% endif %}>
+                            <label class="form-check-label small" for="remove_{{ item.index }}">Not known, remove it from the letter</label>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endfor %}
+
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-stars me-1"></i>Update Letter with AI</button>
+        <a href="{% url 'denial_detail' denial.pk %}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+
+<style>
+    mark.ph { padding: 0 .2em; border-radius: .2em; }
+    mark.ph-dentist { background: #ffe1c2; }
+    mark.ph-staff { background: #d6e8ff; }
+    mark.ph-attach { background: #e4e7eb; }
+    .review-dentist .card-header { border-left: 4px solid #f08c00; }
+    .review-staff .card-header { border-left: 4px solid #3e7bfa; }
+    .review-attach .card-header { border-left: 4px solid #868e96; }
+</style>
+<script>
+(function () {
+    var items = document.querySelectorAll('.review-item');
+    function refresh() {
+        var done = 0;
+        items.forEach(function (li) {
+            var answer = li.querySelector('.answer-box');
+            var checked = li.querySelector('.attach-choice:checked, .remove-choice:checked');
+            var isDone = !!checked || (answer && answer.value.trim() !== '');
+            if (answer) { answer.disabled = answer.hasAttribute('data-locked') || (li.querySelector('.remove-choice') || {}).checked; }
+            var icon = li.querySelector('.status-icon');
+            icon.className = 'bi mt-1 status-icon ' + (isDone ? 'bi-check-circle-fill text-success' : 'bi-circle text-muted');
+            if (isDone) { done++; }
+        });
+        document.getElementById('doneCount').textContent = done;
+    }
+    items.forEach(function (li) {
+        var answer = li.querySelector('.answer-box');
+        if (answer && answer.disabled) { answer.setAttribute('data-locked', ''); }
+        // "Attach" and "remove" are either/or.
+        var attach = li.querySelector('.attach-choice'), remove = li.querySelector('.remove-choice');
+        if (attach && remove) {
+            attach.addEventListener('change', function () { if (attach.checked) { remove.checked = false; } });
+            remove.addEventListener('change', function () { if (remove.checked) { attach.checked = false; } });
+        }
+        li.addEventListener('input', refresh);
+        li.addEventListener('change', refresh);
+    });
+    refresh();
+})();
+</script>
+{% endif %}
+{% endblock %}

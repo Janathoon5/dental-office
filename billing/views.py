@@ -1,5 +1,4 @@
 import mimetypes
-import re
 
 from django.conf import settings
 from django.contrib import messages
@@ -8,15 +7,13 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from auditlog.signals import accessed
-from dental_office.roles import staff_required
+from dental_office.roles import is_dentist, staff_required
 from patients.models import Patient
 from appointments.models import Appointment
 from .models import ClaimDenial, Invoice, OfficeSettings, Payment
 from .forms import DenialUpdateForm, DenialUploadForm, InvoiceForm, PaymentForm
-from .ai import start_analysis
-
-# "[DENTIST TO CONFIRM: ...]"-style gaps the AI leaves for staff to fill in.
-PLACEHOLDER_RE = re.compile(r'\[[^\]\n]{2,}\]')
+from .ai import start_ai_task, start_analysis, start_revision
+from .placeholders import CATEGORY_LABELS, count_by_category, find_placeholders
 
 
 @staff_required
@@ -133,6 +130,9 @@ def denial_list(request):
             denials.filter(status__in=ClaimDenial.OPEN_STATUSES),
             key=lambda d: (d.appeal_deadline is None, d.appeal_deadline or d.created_at.date()),
         )
+    denials = list(denials)
+    for d in denials:
+        d.open_item_count = len(find_placeholders(d.appeal_letter))
     return render(request, 'billing/denial_list.html', {'denials': denials, 'show': show})
 
 
@@ -152,7 +152,8 @@ def denial_detail(request, pk):
         'denial': denial,
         'form': form,
         'ai_phi_allowed': settings.AI_PHI_ALLOWED,
-        'placeholder_count': len(PLACEHOLDER_RE.findall(denial.appeal_letter or '')),
+        'open_items': count_by_category(denial.appeal_letter),
+        'category_labels': CATEGORY_LABELS,
     })
 
 
@@ -162,8 +163,77 @@ def denial_retry(request, pk):
     denial = get_object_or_404(ClaimDenial, pk=pk)
     if denial.ai_status == 'processing' and not denial.ai_is_stuck:
         return redirect('denial_detail', pk=denial.pk)
-    start_analysis(denial)
+    # "Re-run AI" asks for a fresh analysis; "Try again" repeats whichever task failed.
+    task = request.POST.get('task') if request.POST.get('task') in ('analyze', 'revise') else denial.ai_task
+    start_ai_task(denial, task)
     return redirect('denial_detail', pk=denial.pk)
+
+
+def _can_answer_clinical(user):
+    return user.is_superuser or is_dentist(user)
+
+
+@staff_required
+def denial_review(request, pk):
+    """Checklist of the letter's [BRACKETED] items. The team answers them
+    here, then the AI works the answers into the letter."""
+    denial = get_object_or_404(ClaimDenial.objects.select_related('invoice__patient'), pk=pk)
+    accessed.send(sender=ClaimDenial, instance=denial)
+    if denial.ai_status != 'done':
+        return redirect('denial_detail', pk=denial.pk)
+
+    can_answer_clinical = _can_answer_clinical(request.user)
+    items = find_placeholders(denial.appeal_letter)
+    # Pre-fill from earlier answers, e.g. when the AI update failed and they retry.
+    previous = {a['placeholder']: a for a in denial.review_answers}
+    for i, item in enumerate(items):
+        item['index'] = i
+        item['locked'] = item['category'] == 'dentist' and not can_answer_clinical
+        item['previous'] = previous.get(item['placeholder'], {})
+
+    if request.method == 'POST':
+        by_text = {item['placeholder']: item for item in items}
+        answers = []
+        for i in range(len(items)):
+            item = by_text.get(request.POST.get(f'ph_{i}', ''))
+            if item is None:
+                messages.error(request, 'The letter changed while you were filling this in. Please check the list again.')
+                return redirect('denial_review', pk=denial.pk)
+            if item['locked']:
+                continue  # clinical facts must come from a dentist
+            answer = request.POST.get(f'answer_{i}', '').strip()
+            remove = request.POST.get(f'remove_{i}') == 'on'
+            attach = request.POST.get(f'attach_{i}') == 'on'
+            if item['category'] == 'attach' and not (attach or remove):
+                continue
+            if item['category'] != 'attach' and not (answer or remove):
+                continue
+            answers.append({
+                'placeholder': item['placeholder'],
+                'category': item['category'],
+                'question': item['question'],
+                'answer': '' if remove else answer,
+                'remove': remove,
+                'answered_by': request.user.get_full_name() or request.user.username,
+            })
+        if not answers:
+            messages.error(request, 'Answer or check at least one item first.')
+            return redirect('denial_review', pk=denial.pk)
+        denial.review_answers = answers
+        denial.save(update_fields=['review_answers_json'])
+        start_revision(denial)
+        return redirect('denial_detail', pk=denial.pk)
+
+    groups = [
+        (key, label, [item for item in items if item['category'] == key])
+        for key, label in CATEGORY_LABELS.items()
+    ]
+    return render(request, 'billing/denial_review.html', {
+        'denial': denial,
+        'groups': [g for g in groups if g[2]],
+        'item_count': len(items),
+        'can_answer_clinical': can_answer_clinical,
+    })
 
 
 @staff_required

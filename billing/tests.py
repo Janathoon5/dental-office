@@ -148,7 +148,8 @@ class ClaimDenialTests(TestCase):
         page = self.client.get(reverse('denial_detail', args=[denial.pk]))
         self.assertContains(page, 'fractured cusp')
         self.assertContains(page, 'Member ID on the letter differs')
-        self.assertContains(page, 'fill in the <strong>1</strong>')
+        self.assertContains(page, '1 for the dentist')
+        self.assertContains(page, '<mark class="ph ph-dentist">[DENTIST TO CONFIRM: fracture size]</mark>', html=False)
         self.assertContains(page, 'Demo mode')
 
     def test_request_includes_letter_and_patient_records(self):
@@ -273,3 +274,174 @@ class ClaimDenialTests(TestCase):
         self.assertEqual(self.client.get(reverse('denial_list')).status_code, 302)
         self._upload()
         self.assertEqual(ClaimDenial.objects.count(), 1)
+
+
+class PlaceholderTests(TestCase):
+    def test_placeholders_are_sorted_by_who_answers_them(self):
+        from .placeholders import find_placeholders
+        letter = ('Tooth [DENTIST TO CONFIRM: pocket depths on #3] seated on [STAFF TO VERIFY: seat date]. '
+                  'Enclosed: [ATTACH: bitewing X-ray], [ATTACH if available: photo], [DATE OF SERVICE]. '
+                  'Again: [DENTIST TO CONFIRM: pocket depths on #3]')
+        items = find_placeholders(letter)
+        self.assertEqual([(i['category'], i['question']) for i in items], [
+            ('dentist', 'pocket depths on #3'),
+            ('staff', 'seat date'),
+            ('attach', 'bitewing X-ray'),
+            ('attach', 'photo'),
+            ('staff', 'DATE OF SERVICE'),
+        ])
+
+    def test_highlight_escapes_html(self):
+        from .placeholders import highlight
+        html = highlight('<b>x</b> [STAFF TO VERIFY: <i>id</i>]')
+        self.assertEqual(html, '&lt;b&gt;x&lt;/b&gt; <mark class="ph ph-staff">[STAFF TO VERIFY: &lt;i&gt;id&lt;/i&gt;]</mark>')
+
+
+REVIEW_LETTER = (
+    'Dear Reviewer,\n'
+    'Tooth #14 had [DENTIST TO CONFIRM: how much tooth structure was lost?] missing.\n'
+    'Member ID: [STAFF TO VERIFY: correct member ID]\n'
+    'Enclosed:\n1. X-ray\n2. [ATTACH: intraoral photo of #14]\n'
+)
+
+
+class DenialReviewTests(TestCase):
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.media, ignore_errors=True)
+        overrides = override_settings(MEDIA_ROOT=self.media, ANTHROPIC_API_KEY='test-key')
+        overrides.enable()
+        self.addCleanup(overrides.disable)
+
+        patient = Patient.objects.create(first_name='Test', last_name='Patient',
+                                         date_of_birth=datetime.date(1980, 5, 5), phone='555-0000')
+        invoice = Invoice.objects.create(patient=patient, subtotal=1500, insurance_amount=1150)
+        self.denial = ClaimDenial.objects.create(invoice=invoice, letter='x.pdf', ai_status='done',
+                                                 appeal_letter=REVIEW_LETTER)
+        self.dentist = self._staff('drsmith', 'dentist', 'Jane', 'Smith')
+        self.receptionist = self._staff('desk', 'receptionist')
+        self.url = reverse('denial_review', args=[self.denial.pk])
+
+    def _staff(self, username, role, first='', last=''):
+        user = User.objects.create_user(username=username, password='testpass123', first_name=first, last_name=last)
+        StaffProfile.objects.create(user=user, role=role)
+        TOTPDevice.objects.create(user=user, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        return user
+
+    def _post(self, **fields):
+        data = {
+            'ph_0': '[DENTIST TO CONFIRM: how much tooth structure was lost?]',
+            'ph_1': '[STAFF TO VERIFY: correct member ID]',
+            'ph_2': '[ATTACH: intraoral photo of #14]',
+        }
+        data.update(fields)
+        return self.client.post(self.url, data)
+
+    def test_checklist_groups_items_and_locks_clinical_ones_for_non_dentists(self):
+        self.client.force_login(self.receptionist)
+        page = self.client.get(self.url)
+        self.assertContains(page, 'How much tooth structure was lost?')
+        self.assertContains(page, 'Correct member ID')
+        self.assertContains(page, 'Intraoral photo of #14')
+        self.assertContains(page, 'Only a dentist can answer these')
+        self.assertContains(page, 'Waiting for the dentist')
+
+        self.client.force_login(self.dentist)
+        self.assertNotContains(self.client.get(self.url), 'Waiting for the dentist')
+
+    def test_dentist_answers_are_sent_to_ai_and_letter_is_updated(self):
+        revised = {'letter': 'Dear Reviewer,\nAbout 50% was missing.\n', 'changes': ['Added the tooth structure loss.']}
+        patcher, client = mock_claude(fake_response(payload=revised))
+        self.client.force_login(self.dentist)
+        with patcher:
+            response = self._post(answer_0='About 50%', answer_1='SDI-448812', remove_2='on')
+        self.assertRedirects(response, reverse('denial_detail', args=[self.denial.pk]))
+
+        self.denial.refresh_from_db()
+        self.assertEqual(self.denial.ai_task, 'revise')
+        self.assertEqual(self.denial.ai_status, 'done')
+        self.assertEqual(self.denial.appeal_letter, revised['letter'])
+        self.assertEqual(self.denial.revision_notes, revised['changes'])
+
+        kwargs = client.beta.messages.stream.call_args.kwargs
+        self.assertIn('You edit dental insurance appeal', kwargs['system'])
+        sent = kwargs['messages'][0]['content'][0]['text']
+        self.assertIn(REVIEW_LETTER, sent)
+        self.assertIn('Answer: About 50%', sent)
+        self.assertIn('Answered by: Jane Smith (dentist)', sent)
+        self.assertIn('Answer: SDI-448812', sent)
+        self.assertIn('Placeholder: [ATTACH: intraoral photo of #14]', sent)
+        self.assertIn('Answer: REMOVE (not available)', sent)
+
+        page = self.client.get(reverse('denial_detail', args=[self.denial.pk]))
+        self.assertContains(page, 'Added the tooth structure loss.')
+        self.assertContains(page, 'No open items')
+
+    def test_non_dentist_cannot_answer_clinical_items(self):
+        patcher, client = mock_claude(fake_response(payload={'letter': 'x', 'changes': []}))
+        self.client.force_login(self.receptionist)
+        with patcher:
+            self._post(answer_0='I made this up', answer_1='SDI-448812', attach_2='on')
+        answers = ClaimDenial.objects.get().review_answers
+        self.assertEqual([a['category'] for a in answers], ['staff', 'attach'])
+        sent = client.beta.messages.stream.call_args.kwargs['messages'][0]['content'][0]['text']
+        self.assertNotIn('I made this up', sent)
+        self.assertIn('Answer: WILL ATTACH', sent)
+
+    def test_blank_form_does_not_call_ai(self):
+        patcher, client = mock_claude(fake_response())
+        self.client.force_login(self.dentist)
+        with patcher:
+            response = self._post()
+        self.assertRedirects(response, self.url)
+        client.beta.messages.stream.assert_not_called()
+
+    def test_changed_letter_is_detected(self):
+        patcher, client = mock_claude(fake_response())
+        self.client.force_login(self.dentist)
+        with patcher:
+            response = self._post(ph_0='[DENTIST TO CONFIRM: something else]', answer_0='x')
+        self.assertRedirects(response, self.url)
+        client.beta.messages.stream.assert_not_called()
+
+    def test_failed_update_keeps_letter_and_answers_then_retry_revises(self):
+        self.client.force_login(self.dentist)
+        with override_settings(ANTHROPIC_API_KEY=''):
+            self._post(answer_0='About 50%')
+        self.denial.refresh_from_db()
+        self.assertEqual((self.denial.ai_status, self.denial.appeal_letter), ('failed', REVIEW_LETTER))
+        page = self.client.get(reverse('denial_detail', args=[self.denial.pk]))
+        self.assertContains(page, 'your review answers are saved')
+
+        patcher, client = mock_claude(fake_response(payload={'letter': 'Fixed', 'changes': ['ok']}))
+        with patcher:
+            self.client.post(reverse('denial_retry', args=[self.denial.pk]))
+        self.denial.refresh_from_db()
+        self.assertEqual((self.denial.ai_status, self.denial.appeal_letter), ('done', 'Fixed'))
+        sent = client.beta.messages.stream.call_args.kwargs['messages'][0]['content'][0]['text']
+        self.assertIn('Answer: About 50%', sent)
+
+    def test_saved_answers_prefill_the_checklist(self):
+        self.denial.review_answers = [{
+            'placeholder': '[DENTIST TO CONFIRM: how much tooth structure was lost?]', 'category': 'dentist',
+            'question': 'q', 'answer': 'About 50%', 'remove': False, 'answered_by': 'Jane Smith',
+        }]
+        self.denial.save()
+        self.client.force_login(self.dentist)
+        self.assertContains(self.client.get(self.url), 'About 50%')
+
+    def test_rerun_ai_button_starts_a_fresh_analysis(self):
+        self.denial.ai_task = 'revise'
+        self.denial.save()
+        self.client.force_login(self.dentist)
+        with mock.patch('billing.views.start_ai_task') as start:
+            self.client.post(reverse('denial_retry', args=[self.denial.pk]), {'task': 'analyze'})
+        self.assertEqual(start.call_args.args[1], 'analyze')
+
+    def test_list_shows_open_item_count_and_patients_are_blocked(self):
+        self.client.force_login(self.receptionist)
+        self.assertContains(self.client.get(reverse('denial_list')), '3 to confirm')
+        patient_user = User.objects.create_user(username='pt', password='testpass123')
+        patient_user.groups.add(Group.objects.get_or_create(name='Patient')[0])
+        self.client.force_login(patient_user)
+        self.assertEqual(self.client.get(self.url).status_code, 302)

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load denial_tags %}
 {% block title %}Insurance Denial — {{ denial.invoice.patient.full_name }}{% endblock %}
 {% block page_title %}Insurance Denial: {{ denial.invoice.patient.full_name }}{% endblock %}
 
@@ -15,8 +16,13 @@
 <div class="card">
     <div class="card-body text-center py-5">
         <div class="spinner-border text-primary mb-3" role="status"></div>
+        {% if denial.ai_task == 'revise' %}
+        <h5>Updating the letter…</h5>
+        <p class="text-muted mb-0">The AI is adding your team's answers to the letter. This usually takes under a minute; the page will update by itself.</p>
+        {% else %}
         <h5>Reading the letter…</h5>
         <p class="text-muted mb-0">The AI is reviewing the denial against {{ denial.invoice.patient.first_name }}'s records. This usually takes about a minute; the page will update by itself.</p>
+        {% endif %}
     </div>
 </div>
 
@@ -24,7 +30,8 @@
 <div class="alert alert-danger d-flex flex-wrap justify-content-between align-items-center gap-2">
     <span>
         <i class="bi bi-x-octagon me-1"></i>
-        {% if denial.ai_is_stuck %}The analysis didn't finish (the server may have restarted).{% else %}{{ denial.ai_error }}{% endif %}
+        {% if denial.ai_is_stuck %}The AI didn't finish (the server may have restarted).{% else %}{{ denial.ai_error }}{% endif %}
+        {% if denial.ai_task == 'revise' %}<span class="d-block small">The letter hasn't been changed, and your review answers are saved.</span>{% endif %}
     </span>
     <form method="post" action="{% url 'denial_retry' denial.pk %}">
         {% csrf_token %}
@@ -39,6 +46,16 @@
     <ul class="mb-0 small">
         {% for w in denial.warnings %}<li>{{ w }}</li>{% endfor %}
     </ul>
+</div>
+{% endif %}
+
+{% if denial.revision_notes %}
+<div class="alert alert-success alert-dismissible fade show">
+    <div class="fw-semibold mb-1"><i class="bi bi-stars me-1"></i>The AI updated the letter with your team's answers</div>
+    <ul class="mb-0 small">
+        {% for note in denial.revision_notes %}<li>{{ note }}</li>{% endfor %}
+    </ul>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 {% endif %}
 
@@ -89,6 +106,26 @@
     </div>
 
     <div class="col-lg-7">
+        {% with dentist=open_items.dentist staff=open_items.staff attach=open_items.attach %}
+        {% if dentist or staff or attach %}
+        <div class="card mb-3 border-warning">
+            <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div>
+                    <div class="fw-semibold"><i class="bi bi-list-check me-1"></i>Needs confirmation before sending</div>
+                    <div class="small mt-1 d-flex flex-wrap gap-2">
+                        {% if dentist %}<span class="ph-chip ph-dentist">{{ dentist }} for the dentist</span>{% endif %}
+                        {% if staff %}<span class="ph-chip ph-staff">{{ staff }} for staff</span>{% endif %}
+                        {% if attach %}<span class="ph-chip ph-attach">{{ attach }} attachment{{ attach|pluralize }}</span>{% endif %}
+                    </div>
+                </div>
+                <a href="{% url 'denial_review' denial.pk %}" class="btn btn-warning"><i class="bi bi-ui-checks me-1"></i>Open Review Checklist</a>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-success small py-2"><i class="bi bi-check2-circle me-1"></i>No open items. Give the letter a final read, then print it.</div>
+        {% endif %}
+        {% endwith %}
+
         <form method="post" class="card">
             {% csrf_token %}
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -120,10 +157,22 @@
                     </div>
                 </div>
 
-                <div class="alert alert-light border small py-2">
-                    <i class="bi bi-stars me-1"></i>AI-written draft. Read every fact before sending{% if placeholder_count %}, and fill in the <strong>{{ placeholder_count }}</strong> [BRACKETED] item{{ placeholder_count|pluralize }}{% endif %}.
+                <ul class="nav nav-tabs small" role="tablist">
+                    <li class="nav-item"><button type="button" class="nav-link active" data-bs-toggle="tab" data-bs-target="#letterPreview"><i class="bi bi-eye me-1"></i>Preview</button></li>
+                    <li class="nav-item"><button type="button" class="nav-link" data-bs-toggle="tab" data-bs-target="#letterEdit"><i class="bi bi-pencil me-1"></i>Edit</button></li>
+                </ul>
+                <div class="tab-content border border-top-0 rounded-bottom">
+                    <div class="tab-pane fade show active p-3" id="letterPreview">
+                        <div class="letter-preview">{{ denial.appeal_letter|highlight_placeholders }}</div>
+                    </div>
+                    <div class="tab-pane fade p-2" id="letterEdit">
+                        <textarea name="appeal_letter" rows="24" class="form-control font-monospace small border-0">{{ form.appeal_letter.value|default:'' }}</textarea>
+                    </div>
                 </div>
-                <textarea name="appeal_letter" rows="24" class="form-control font-monospace small">{{ form.appeal_letter.value|default:'' }}</textarea>
+                <div class="small text-muted mt-2">
+                    <i class="bi bi-stars me-1"></i>AI-written draft. Read every fact before sending.
+                    <span class="ph-chip ph-dentist">Dentist</span> <span class="ph-chip ph-staff">Staff</span> <span class="ph-chip ph-attach">Attachment</span> highlights still need an answer.
+                </div>
                 {% for e in form.errors.values %}<div class="text-danger small mt-2">{{ e|join:" " }}</div>{% endfor %}
             </div>
             <div class="card-footer d-flex flex-wrap justify-content-between gap-2">
@@ -133,8 +182,16 @@
                 </button>
             </div>
         </form>
-        <form method="post" action="{% url 'denial_retry' denial.pk %}" id="retryForm">{% csrf_token %}</form>
+        <form method="post" action="{% url 'denial_retry' denial.pk %}" id="retryForm">{% csrf_token %}<input type="hidden" name="task" value="analyze"></form>
     </div>
 </div>
 {% endif %}
+<style>
+    .letter-preview { white-space: pre-wrap; font-family: Georgia, 'Times New Roman', serif; font-size: .95rem; line-height: 1.5; max-height: 36rem; overflow-y: auto; }
+    mark.ph { padding: 0 .2em; border-radius: .2em; }
+    .ph-dentist { background: #ffe1c2; }
+    .ph-staff { background: #d6e8ff; }
+    .ph-attach { background: #e4e7eb; }
+    .ph-chip { display: inline-block; padding: .05rem .45rem; border-radius: 1rem; font-size: .8rem; color: #212529; }
+</style>
 {% endblock %}

@@ -1,4 +1,5 @@
 import datetime
+import json
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
@@ -110,6 +111,10 @@ class ClaimDenial(SoftDeleteModel):
         ('done', 'Done'),
         ('failed', 'Failed'),
     ]
+    AI_TASK_CHOICES = [
+        ('analyze', 'Analyze letter'),
+        ('revise', 'Update letter with review answers'),
+    ]
     RECOMMENDATION_CHOICES = [
         ('appeal', 'Appeal'),
         ('resubmit', 'Correct & resubmit'),
@@ -126,6 +131,7 @@ class ClaimDenial(SoftDeleteModel):
 
     # Filled in by the AI analysis (billing/ai.py)
     ai_status = models.CharField(max_length=20, choices=AI_STATUS_CHOICES, default='processing')
+    ai_task = models.CharField(max_length=10, choices=AI_TASK_CHOICES, default='analyze')
     ai_error = models.TextField(blank=True)
     ai_started_at = models.DateTimeField(null=True, blank=True)
     insurer_name = models.CharField(max_length=200, blank=True)
@@ -140,6 +146,12 @@ class ClaimDenial(SoftDeleteModel):
     checklist = models.JSONField(default=list, blank=True)
     warnings = models.JSONField(default=list, blank=True)
     appeal_letter = EncryptedTextField(blank=True)
+
+    # The dental team's answers to the letter's [BRACKETED] items, which the AI
+    # then works into the letter. JSON list; encrypted because the dentist's
+    # answers are clinical details.
+    review_answers_json = EncryptedTextField(blank=True)
+    revision_notes = models.JSONField(default=list, blank=True)
 
     class Meta(SoftDeleteModel.Meta):
         ordering = ['-created_at']
@@ -158,6 +170,14 @@ class ClaimDenial(SoftDeleteModel):
         from django.utils import timezone
         return (self.ai_status == 'processing' and self.ai_started_at is not None
                 and timezone.now() - self.ai_started_at > datetime.timedelta(minutes=10))
+
+    @property
+    def review_answers(self):
+        return json.loads(self.review_answers_json) if self.review_answers_json else []
+
+    @review_answers.setter
+    def review_answers(self, answers):
+        self.review_answers_json = json.dumps(answers)
 
     @property
     def days_until_deadline(self):
