@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import User
 from encrypted_model_fields.fields import EncryptedTextField
 from dental_office.mixins import SoftDeleteModel
@@ -61,3 +62,38 @@ class TreatmentPlanItem(models.Model):
 
     def __str__(self):
         return self.procedure
+
+
+class ToothCondition(models.Model):
+    """The current state of one tooth, using Universal numbering (1-32).
+    A tooth with no row is healthy — setting a tooth back to healthy deletes
+    its row. Changes are tracked by auditlog rather than soft delete, since
+    only the latest state matters for the chart."""
+    CONDITION_CHOICES = [
+        ('decay', 'Decay / Cavity'),
+        ('filling', 'Filling'),
+        ('crown', 'Crown'),
+        ('root_canal', 'Root Canal'),
+        ('implant', 'Implant'),
+        ('bridge', 'Bridge'),
+        ('missing', 'Missing'),
+        ('watch', 'Watch'),
+    ]
+
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='tooth_conditions')
+    tooth_number = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(32)]
+    )
+    condition = models.CharField(max_length=20, choices=CONDITION_CHOICES)
+    notes = EncryptedTextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    class Meta:
+        ordering = ['tooth_number']
+        constraints = [
+            models.UniqueConstraint(fields=['patient', 'tooth_number'], name='unique_tooth_per_patient'),
+        ]
+
+    def __str__(self):
+        return f"{self.patient} — #{self.tooth_number} {self.get_condition_display()}"

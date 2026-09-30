@@ -7,7 +7,8 @@ class ClinicalConfig(AppConfig):
 
     def ready(self):
         from auditlog.registry import auditlog
-        from .models import TreatmentRecord, TreatmentPlan, TreatmentPlanItem
+        from .models import TreatmentRecord, TreatmentPlan, TreatmentPlanItem, ToothCondition
         auditlog.register(TreatmentRecord)
         auditlog.register(TreatmentPlan)
         auditlog.register(TreatmentPlanItem)
+        auditlog.register(ToothCondition)

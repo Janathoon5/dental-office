@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% block title %}Tooth Chart — {{ patient.full_name }}{% endblock %}
+{% block page_title %}Tooth Chart: {{ patient.full_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'patient_detail' patient.pk %}" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Back to {{ patient.full_name }}</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-grid-3x3-gap me-2"></i>Chart</span>
+                <span class="small text-muted fw-normal">Click a tooth to see its history{% if can_edit %} or update it{% endif %}.</span>
+            </div>
+            <div class="card-body">
+                {% include 'clinical/_tooth_svg.html' %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-4">
+        <!-- Shown when no tooth is selected -->
+        <div class="card tooth-panel" data-panel="none" {% if selected %}hidden{% endif %}>
+            <div class="card-header fw-semibold"><i class="bi bi-list-check me-2"></i>Summary</div>
+            <div class="card-body">
+                {% with charted=chart.counts.charted %}
+                {% if charted %}
+                <ul class="list-unstyled mb-0">
+                    {% for t in chart.all %}{% if t.condition %}
+                    <li class="mb-1">
+                        <a href="?tooth={{ t.number }}" class="text-decoration-none tooth-link" data-tooth="{{ t.number }}">#{{ t.number }}</a>
+                        {{ t.condition.get_condition_display }}
+                        <span class="text-muted small">· {{ t.name }}</span>
+                    </li>
+                    {% endif %}{% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">All teeth are charted as healthy. Click a tooth to record a filling, crown, missing tooth, and so on.</p>
+                {% endif %}
+                {% endwith %}
+            </div>
+        </div>
+
+        {% for t in chart.all %}
+        <div class="card tooth-panel" data-panel="{{ t.number }}" {% if t.number != selected %}hidden{% endif %}>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">#{{ t.number }} · {{ t.name }}</span>
+                <a href="{% url 'tooth_chart' patient.pk %}" class="btn-close tooth-close" aria-label="Close"></a>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="text-muted small">Current condition</div>
+                    <div class="fw-semibold">{% if t.condition %}{{ t.condition.get_condition_display }}{% else %}Healthy{% endif %}</div>
+                    {% if t.condition.notes %}<div class="small mt-1">{{ t.condition.notes|linebreaksbr }}</div>{% endif %}
+                    {% if t.condition %}
+                    <div class="small text-muted mt-1">Updated {{ t.condition.updated_at|date:"M j, Y" }}{% if t.condition.updated_by %} by {{ t.condition.updated_by.get_full_name|default:t.condition.updated_by.username }}{% endif %}</div>
+                    {% endif %}
+                </div>
+
+                {% if can_edit %}
+                <form method="post" action="{% url 'tooth_update' patient.pk t.number %}" class="mb-4 border rounded p-3 bg-light">
+                    {% csrf_token %}
+                    <label class="form-label fw-semibold small" for="cond-{{ t.number }}">Update condition</label>
+                    <select name="condition" id="cond-{{ t.number }}" class="form-select form-select-sm mb-2">
+                        <option value="healthy" {% if not t.condition %}selected{% endif %}>Healthy</option>
+                        {% for value, label in condition_choices %}
+                        <option value="{{ value }}" {% if t.code == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <textarea name="notes" rows="2" class="form-control form-control-sm mb-2" placeholder="Notes (optional), e.g. surfaces MOD, porcelain crown">{{ t.condition.notes|default:'' }}</textarea>
+                    <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                </form>
+                {% endif %}
+
+                <div class="mb-3">
+                    <div class="fw-semibold small mb-1"><i class="bi bi-hourglass-split me-1"></i>Planned work</div>
+                    {% for item in t.planned %}
+                    <div class="small mb-1">
+                        {{ item.procedure }}
+                        <span class="text-muted">· ${{ item.estimated_cost }} · <a href="{% url 'plan_detail' item.plan.pk %}">{{ item.plan.title }}</a></span>
+                    </div>
+                    {% empty %}
+                    <div class="small text-muted">None</div>
+                    {% endfor %}
+                </div>
+
+                <div>
+                    <div class="fw-semibold small mb-1"><i class="bi bi-clock-history me-1"></i>Treatment history</div>
+                    {% for r in t.records %}
+                    <div class="small mb-1">
+                        <span class="text-muted">{{ r.date|date:"M j, Y" }}</span> · {{ r.procedure }}
+                        {% if r.dentist %}<span class="text-muted">· {{ r.dentist.get_full_name }}</span>{% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="small text-muted">No treatment records for this tooth.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+(function () {
+    // Switch panels without a page reload; links still work without JS.
+    var panels = document.querySelectorAll('.tooth-panel');
+    var teeth = document.querySelectorAll('.tooth-chart .tooth');
+    function show(num) {
+        panels.forEach(function (p) { p.hidden = p.dataset.panel !== String(num || 'none'); });
+        teeth.forEach(function (t) { t.classList.toggle('selected', t.dataset.tooth === String(num)); });
+        var url = new URL(window.location);
+        if (num) { url.searchParams.set('tooth', num); } else { url.searchParams.delete('tooth'); }
+        history.replaceState(null, '', url);
+    }
+    document.querySelectorAll('.tooth-chart .tooth, .tooth-link').forEach(function (el) {
+        el.addEventListener('click', function (e) {
+            e.preventDefault();
+            show(el.dataset.tooth);
+            if (window.innerWidth < 1200) {
+                document.querySelector('.tooth-panel[data-panel="' + el.dataset.tooth + '"]').scrollIntoView({behavior: 'smooth'});
+            }
+        });
+    });
+    document.querySelectorAll('.tooth-close').forEach(function (el) {
+        el.addEventListener('click', function (e) { e.preventDefault(); show(null); });
+    });
+})();
+</script>
+{% endblock %}

@@ -8,6 +8,7 @@ from dental_office.roles import staff_required
 from .models import Patient, MedicalAlert
 from .forms import PatientForm, MedicalAlertForm
 from appointments.recalls import recall_for_patient
+from clinical.teeth import build_chart
 
 
 @staff_required
@@ -39,6 +40,7 @@ def patient_detail(request, pk):
     return render(request, 'patients/patient_detail.html', {
         'patient': patient,
         'recall': recall_for_patient(patient),
+        'chart': build_chart(patient),
         'appointments': appointments,
         'alert_form': alert_form,
         'patient_has_portal': patient_has_portal,

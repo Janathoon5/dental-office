@@ -1,5 +1,5 @@
 from django import forms
-from .models import TreatmentRecord, TreatmentPlan, TreatmentPlanItem
+from .models import TreatmentRecord, TreatmentPlan, TreatmentPlanItem, ToothCondition
 
 
 class TreatmentRecordForm(forms.ModelForm):
@@ -25,3 +25,9 @@ class TreatmentPlanItemForm(forms.ModelForm):
     class Meta:
         model = TreatmentPlanItem
         fields = ['procedure', 'tooth_number', 'estimated_cost', 'status']
+
+
+class ToothConditionForm(forms.ModelForm):
+    class Meta:
+        model = ToothCondition
+        fields = ['condition', 'notes']

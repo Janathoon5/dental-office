@@ -1,0 +1,63 @@
+{# Expects: chart (from clinical.teeth.build_chart), patient, optional selected. #}
+<div class="tooth-chart-wrap">
+<svg class="tooth-chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="group" aria-label="Tooth chart">
+    <line x1="{{ chart.midline_x }}" y1="0" x2="{{ chart.midline_x }}" y2="{{ chart.height }}" class="midline"/>
+    <line x1="0" y1="130" x2="{{ chart.width }}" y2="130" class="midline"/>
+    {% for t in chart.all %}
+    <a href="{% url 'tooth_chart' patient.pk %}?tooth={{ t.number }}" class="tooth tooth-{{ t.code }}{% if t.number == selected %} selected{% endif %}" data-tooth="{{ t.number }}">
+        <title>#{{ t.number }} {{ t.name }}{% if t.condition %} — {{ t.condition.get_condition_display }}{% endif %}{% if t.planned %} (planned work){% endif %}</title>
+        <rect x="{{ t.x }}" y="{{ t.hit_y }}" width="{{ t.w }}" height="110" class="hit"/>
+        <path d="{{ t.root_path }}" class="root"/>
+        <rect x="{{ t.x }}" y="{{ t.crown_y }}" width="{{ t.w }}" height="{{ t.crown_h }}" rx="{{ t.crown_rx }}" class="crown" fill="{{ t.fill }}"/>
+        {% if t.code == 'root_canal' %}
+        <line x1="{{ t.cx }}" y1="{{ t.canal_y1 }}" x2="{{ t.cx }}" y2="{{ t.canal_y2 }}" class="canal"/>
+        {% elif t.code == 'missing' %}
+        <line x1="{{ t.x }}" y1="{{ t.crown_y }}" x2="{{ t.x2 }}" y2="{{ t.crown_y2 }}" class="missing-x"/>
+        <line x1="{{ t.x2 }}" y1="{{ t.crown_y }}" x2="{{ t.x }}" y2="{{ t.crown_y2 }}" class="missing-x"/>
+        {% endif %}
+        {% if t.planned %}<circle cx="{{ t.cx }}" cy="{{ t.planned_cy }}" r="9" class="planned"/>{% endif %}
+        <text x="{{ t.cx }}" y="{{ t.label_y }}" class="num">{{ t.number }}</text>
+    </a>
+    {% endfor %}
+</svg>
+</div>
+<div class="d-flex justify-content-between small text-muted px-1 mt-1">
+    <span>&larr; Patient's right</span><span>Patient's left &rarr;</span>
+</div>
+<div class="tooth-legend small mt-2">
+    <span><i style="background:#fff"></i>Healthy</span>
+    <span><i style="background:#e5484d"></i>Decay</span>
+    <span><i style="background:#3e7bfa"></i>Filling</span>
+    <span><i style="background:#e0a526"></i>Crown</span>
+    <span><i class="lg-canal"></i>Root canal</span>
+    <span><i style="background:#cfd6de"></i>Implant</span>
+    <span><i style="background:#8e6cd8"></i>Bridge</span>
+    <span><i style="background:#fff; border-color:#f08c00; border-width:2px"></i>Watch</span>
+    <span><i class="lg-missing"></i>Missing</span>
+    <span><i class="lg-planned"></i>Planned work</span>
+</div>
+<style>
+    .tooth-chart-wrap { overflow-x: auto; }
+    .tooth-chart { width: 100%; min-width: 520px; height: auto; display: block; }
+    .tooth-chart .midline { stroke: #dee2e6; stroke-dasharray: 4 4; }
+    .tooth-chart .hit { fill: transparent; }
+    .tooth-chart .root { fill: #f3efe6; stroke: #9aa5b1; stroke-width: 1.2; }
+    .tooth-chart .crown { stroke: #7b8794; stroke-width: 1.4; }
+    .tooth-chart .canal { stroke: #e5484d; stroke-width: 3; stroke-linecap: round; }
+    .tooth-chart .tooth-implant .root { fill: #6b7785; stroke: #4a5461; }
+    .tooth-chart .tooth-watch .crown { stroke: #f08c00; stroke-width: 3; }
+    .tooth-chart .tooth-missing .root,
+    .tooth-chart .tooth-missing .crown { fill: none; stroke: #adb5bd; stroke-dasharray: 3 3; }
+    .tooth-chart .missing-x { stroke: #adb5bd; stroke-width: 1.5; }
+    .tooth-chart .planned { fill: #fff1c2; stroke: #e0a526; stroke-width: 1.5; }
+    .tooth-chart .num { font-size: 11px; font-weight: 600; text-anchor: middle; fill: #495057; }
+    .tooth-chart .tooth { cursor: pointer; outline: none; text-decoration: none; }
+    .tooth-chart .tooth:hover .crown, .tooth-chart .tooth:focus-visible .crown { stroke: #1a3a5c; stroke-width: 2.5; }
+    .tooth-chart .tooth.selected .hit { fill: rgba(26, 58, 92, 0.08); }
+    .tooth-chart .tooth.selected .crown { stroke: #1a3a5c; stroke-width: 3; }
+    .tooth-legend { display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; color: #495057; }
+    .tooth-legend i { display: inline-block; width: 12px; height: 12px; border: 1px solid #7b8794; border-radius: 3px; margin-right: 0.3rem; vertical-align: -1px; }
+    .tooth-legend .lg-canal { background: linear-gradient(90deg, #fff 40%, #e5484d 40%, #e5484d 60%, #fff 60%); }
+    .tooth-legend .lg-missing { border-style: dashed; background: none; }
+    .tooth-legend .lg-planned { border-radius: 50%; background: #fff1c2; border-color: #e0a526; }
+</style>

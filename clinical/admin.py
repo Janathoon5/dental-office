@@ -1,6 +1,6 @@
 from django.contrib import admin
 from dental_office.mixins import SoftDeleteAdminMixin
-from .models import TreatmentRecord, TreatmentPlan, TreatmentPlanItem
+from .models import TreatmentRecord, TreatmentPlan, TreatmentPlanItem, ToothCondition
 
 
 @admin.register(TreatmentRecord)
@@ -20,3 +20,10 @@ class TreatmentPlanAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_display = ['patient', 'title', 'status', 'created_date', 'is_active']
     list_filter = ['status']
     inlines = [TreatmentPlanItemInline]
+
+
+@admin.register(ToothCondition)
+class ToothConditionAdmin(admin.ModelAdmin):
+    list_display = ['patient', 'tooth_number', 'condition', 'updated_at', 'updated_by']
+    list_filter = ['condition']
+    search_fields = ['patient__first_name', 'patient__last_name']
