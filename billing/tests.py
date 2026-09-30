@@ -1,4 +1,5 @@
 import datetime
+import io
 import json
 import shutil
 import tempfile
@@ -13,7 +14,7 @@ from django.urls import reverse
 from clinical.models import ToothCondition, TreatmentRecord
 from patients.models import MedicalAlert, Patient
 from staff.models import StaffProfile, TOTPDevice
-from .models import ClaimDenial, Invoice, OfficeSettings
+from .models import ClaimDenial, Invoice, InvoiceLineItem, OfficeSettings
 
 
 class BillingAccessControlTests(TestCase):
@@ -445,3 +446,69 @@ class DenialReviewTests(TestCase):
         patient_user.groups.add(Group.objects.get_or_create(name='Patient')[0])
         self.client.force_login(patient_user)
         self.assertEqual(self.client.get(self.url).status_code, 302)
+
+
+class StaffTestMixin:
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.media, ignore_errors=True)
+        overrides = override_settings(MEDIA_ROOT=self.media, ANTHROPIC_API_KEY='test-key')
+        overrides.enable()
+        self.addCleanup(overrides.disable)
+        self.patient = Patient.objects.create(
+            first_name='Maria', last_name='Lopez', date_of_birth=datetime.date(1985, 3, 2), phone='555-0000',
+            insurance_provider='Sunrise Dental', insurance_id='SDI-448812',
+        )
+        self.invoice = Invoice.objects.create(patient=self.patient, subtotal=0)
+        self.staff = User.objects.create_user(username='desk', password='testpass123')
+        StaffProfile.objects.create(user=self.staff, role='receptionist')
+        TOTPDevice.objects.create(user=self.staff, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        self.client.force_login(self.staff)
+
+
+class InvoiceLineItemTests(StaffTestMixin, TestCase):
+    def _add(self, **overrides):
+        data = {'service_date': '2026-08-28', 'cdt_code': 'D2740', 'tooth_number': '14', 'surfaces': '',
+                'description': 'Crown, porcelain/ceramic', 'fee': '1500.00'}
+        data.update(overrides)
+        return self.client.post(reverse('line_item_add', args=[self.invoice.pk]), data)
+
+    def test_adding_and_removing_lines_keeps_subtotal_in_sync(self):
+        self._add()
+        self._add(cdt_code='d2950', description='Core buildup', fee='250', surfaces='m o')
+        self.invoice.refresh_from_db()
+        self.assertEqual(str(self.invoice.subtotal), '1750.00')
+        buildup = InvoiceLineItem.objects.get(cdt_code='D2950')
+        self.assertEqual(buildup.surfaces, 'MO')
+
+        self.client.post(reverse('line_item_delete', args=[buildup.pk]))
+        self.invoice.refresh_from_db()
+        self.assertEqual(str(self.invoice.subtotal), '1500.00')
+
+        page = self.client.get(reverse('invoice_detail', args=[self.invoice.pk]))
+        self.assertContains(page, 'D2740')
+        self.assertContains(page, '<option value="D2392">', html=False)
+        edit_form = self.client.get(reverse('invoice_edit', args=[self.invoice.pk]))
+        self.assertContains(edit_form, 'Calculated from the procedures')
+
+    def test_invalid_code_and_surfaces_are_rejected(self):
+        self._add(cdt_code='2740')
+        self._add(surfaces='XYZ')
+        self.assertFalse(InvoiceLineItem.objects.exists())
+        page = self.client.get(reverse('invoice_detail', args=[self.invoice.pk]))
+        self.assertContains(page, 'Use a CDT code like D2740.')
+        self.assertContains(page, 'Use surface letters')
+
+    def test_ai_sees_the_claim_lines(self):
+        from .ai import build_case_context
+        self.assertIn('Not itemized on our invoice', build_case_context(self.invoice))
+        self._add(surfaces='MOD')
+        self.assertIn('- 2026-08-28: D2740 Crown, porcelain/ceramic, tooth 14, surfaces MOD, $1500.00',
+                      build_case_context(self.invoice))
+
+    def test_patients_cannot_edit_lines(self):
+        patient_user = User.objects.create_user(username='pt', password='testpass123')
+        patient_user.groups.add(Group.objects.get_or_create(name='Patient')[0])
+        self.client.force_login(patient_user)
+        self._add()
+        self.assertFalse(InvoiceLineItem.objects.exists())

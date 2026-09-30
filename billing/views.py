@@ -10,8 +10,9 @@ from auditlog.signals import accessed
 from dental_office.roles import is_dentist, staff_required
 from patients.models import Patient
 from appointments.models import Appointment
-from .models import ClaimDenial, Invoice, OfficeSettings, Payment
-from .forms import DenialUpdateForm, DenialUploadForm, InvoiceForm, PaymentForm
+from .models import ClaimDenial, Invoice, InvoiceLineItem, OfficeSettings, Payment
+from .forms import DenialUpdateForm, DenialUploadForm, InvoiceForm, InvoiceLineItemForm, PaymentForm
+from .cdt import COMMON_CODES
 from .ai import start_ai_task, start_analysis, start_revision
 from .placeholders import CATEGORY_LABELS, count_by_category, find_placeholders
 
@@ -36,6 +37,11 @@ def invoice_detail(request, pk):
     return render(request, 'billing/invoice_detail.html', {
         'invoice': invoice,
         'payment_form': payment_form,
+        'line_items': invoice.line_items.all(),
+        'line_form': InvoiceLineItemForm(initial={
+            'service_date': (invoice.appointment.date if invoice.appointment else timezone.localdate()).isoformat(),
+        }),
+        'common_codes': COMMON_CODES,
         'denials': invoice.denials.all(),
         'denial_form': DenialUploadForm(),
         'ai_phi_allowed': settings.AI_PHI_ALLOWED,
@@ -75,6 +81,34 @@ def invoice_edit(request, pk):
     else:
         form = InvoiceForm(instance=invoice)
     return render(request, 'billing/invoice_form.html', {'form': form, 'title': 'Edit Invoice', 'invoice': invoice})
+
+
+@staff_required
+@require_POST
+def line_item_add(request, invoice_pk):
+    invoice = get_object_or_404(Invoice, pk=invoice_pk)
+    form = InvoiceLineItemForm(request.POST)
+    if form.is_valid():
+        line = form.save(commit=False)
+        line.invoice = invoice
+        line.save()
+        invoice.recalculate_subtotal()
+    else:
+        for field, errors in form.errors.items():
+            label = form.fields[field].label if field in form.fields else ''
+            for error in errors:
+                messages.error(request, f'{label}: {error}' if label else error)
+    return redirect('invoice_detail', pk=invoice.pk)
+
+
+@staff_required
+@require_POST
+def line_item_delete(request, pk):
+    line = get_object_or_404(InvoiceLineItem, pk=pk)
+    invoice = line.invoice
+    line.delete()
+    invoice.recalculate_subtotal()
+    return redirect('invoice_detail', pk=invoice.pk)
 
 
 @staff_required

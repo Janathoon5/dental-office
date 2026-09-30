@@ -20,6 +20,7 @@
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Subtotal ($) *</label>
                     {{ form.subtotal }}
+                    {% if form.subtotal.help_text %}<div class="form-text">{{ form.subtotal.help_text }}</div>{% endif %}
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Insurance Covers ($)</label>

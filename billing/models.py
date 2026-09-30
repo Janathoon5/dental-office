@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from django.conf import settings
 
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 from encrypted_model_fields.fields import EncryptedTextField
 from dental_office.mixins import SoftDeleteModel
@@ -43,6 +43,34 @@ class Invoice(SoftDeleteModel):
 
     def balance_due(self):
         return self.patient_owes() - self.amount_paid()
+
+    def recalculate_subtotal(self):
+        """Once an invoice has procedure lines, its subtotal is their total."""
+        lines = list(self.line_items.all())
+        if lines:
+            self.subtotal = sum((line.fee for line in lines), Decimal('0'))
+            self.save(update_fields=['subtotal'])
+
+
+class InvoiceLineItem(models.Model):
+    """One billed procedure, the way it appears on an insurance claim."""
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='line_items')
+    service_date = models.DateField('Date of service')
+    cdt_code = models.CharField(
+        'Procedure code', max_length=5,
+        validators=[RegexValidator(r'^D\d{4}$', 'Use a CDT code like D2740.')],
+    )
+    description = models.CharField(max_length=200)
+    tooth_number = models.CharField('Tooth', max_length=20, blank=True)
+    surfaces = models.CharField(max_length=10, blank=True)
+    fee = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0'))])
+
+    class Meta:
+        ordering = ['service_date', 'pk']
+
+    def __str__(self):
+        tooth = f' #{self.tooth_number}' if self.tooth_number else ''
+        return f'{self.cdt_code}{tooth} {self.description}'
 
 
 class Payment(SoftDeleteModel):

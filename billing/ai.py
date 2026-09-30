@@ -177,6 +177,17 @@ def build_case_context(invoice):
         _line('Invoice notes', invoice.notes),
     ])))
 
+    lines = list(invoice.line_items.all())
+    if lines:
+        rows = ['## Procedures billed on this claim (from our invoice)']
+        for line in lines:
+            tooth = f', tooth {line.tooth_number}' if line.tooth_number else ''
+            surfaces = f', surfaces {line.surfaces}' if line.surfaces else ''
+            rows.append(f'- {line.service_date.isoformat()}: {line.cdt_code} {line.description}{tooth}{surfaces}, ${line.fee}')
+        sections.append('\n'.join(rows))
+    else:
+        sections.append('## Procedures billed on this claim\nNot itemized on our invoice. Use the codes on the insurer\'s letter.')
+
     two_years_ago = timezone.localdate() - datetime.timedelta(days=730)
     records = patient.treatment_records.filter(date__gte=two_years_ago).select_related('dentist').order_by('-date')[:40]
     if records:

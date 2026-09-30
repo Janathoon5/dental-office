@@ -1,7 +1,7 @@
 from django import forms
 from pathlib import Path
 
-from .models import ClaimDenial, Invoice, Payment
+from .models import ClaimDenial, Invoice, InvoiceLineItem, Payment
 
 
 class InvoiceForm(forms.ModelForm):
@@ -11,6 +11,31 @@ class InvoiceForm(forms.ModelForm):
         widgets = {
             'notes': forms.Textarea(attrs={'rows': 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and self.instance.line_items.exists():
+            # Kept in sync with the procedure lines instead.
+            self.fields['subtotal'].disabled = True
+            self.fields['subtotal'].help_text = 'Calculated from the procedures on this invoice.'
+
+
+class InvoiceLineItemForm(forms.ModelForm):
+    class Meta:
+        model = InvoiceLineItem
+        fields = ['service_date', 'cdt_code', 'tooth_number', 'surfaces', 'description', 'fee']
+        widgets = {
+            'service_date': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
+        }
+
+    def clean_cdt_code(self):
+        return self.cleaned_data['cdt_code'].strip().upper()
+
+    def clean_surfaces(self):
+        surfaces = self.cleaned_data['surfaces'].replace(' ', '').replace(',', '').upper()
+        if surfaces and not set(surfaces) <= set('MODBLFI'):
+            raise forms.ValidationError('Use surface letters M, O, D, B, L, F or I (e.g. MOD).')
+        return surfaces
 
 
 class PaymentForm(forms.ModelForm):
