@@ -57,7 +57,10 @@ def get_post_login_redirect(user):
 def _require_2fa(user):
     """Staff accounts must have confirmed 2FA. Returns a redirect if not set
     up yet, or None if the user is clear to proceed."""
+    from django.conf import settings
     from staff.models import TOTPDevice
+    if not settings.REQUIRE_2FA:
+        return None
     try:
         if not user.totp_device.confirmed:
             return redirect('setup_2fa')

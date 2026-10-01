@@ -10,7 +10,7 @@ from auditlog.signals import accessed
 from dental_office.roles import is_dentist, staff_required
 from patients.models import Patient
 from appointments.models import Appointment
-from .models import ClaimDenial, Invoice, InvoiceLineItem, OfficeSettings, Payment
+from .models import AIUsage, ClaimDenial, Invoice, InvoiceLineItem, OfficeSettings, Payment
 from .forms import DenialUpdateForm, DenialUploadForm, InvoiceForm, InvoiceLineItemForm, PaymentForm
 from .cdt import COMMON_CODES
 from .packet import build_packet, packet_options
@@ -136,6 +136,10 @@ def payment_add(request, invoice_pk):
 @require_POST
 def denial_upload(request, invoice_pk):
     invoice = get_object_or_404(Invoice, pk=invoice_pk)
+    if AIUsage.limit_reached(request.user):
+        messages.error(request, "Today's AI limit for the demo has been reached. "
+                       'The preloaded denials show finished examples, or try again tomorrow.')
+        return redirect('invoice_detail', pk=invoice.pk)
     form = DenialUploadForm(
         request.POST, request.FILES,
         require_no_phi_confirmation=not settings.AI_PHI_ALLOWED,
@@ -148,7 +152,7 @@ def denial_upload(request, invoice_pk):
     denial = ClaimDenial.objects.create(
         invoice=invoice, letter=form.cleaned_data['letter'], created_by=request.user,
     )
-    start_analysis(denial)
+    start_analysis(denial, request.user)
     return redirect('denial_detail', pk=denial.pk)
 
 
@@ -199,8 +203,12 @@ def denial_retry(request, pk):
     if denial.ai_status == 'processing' and not denial.ai_is_stuck:
         return redirect('denial_detail', pk=denial.pk)
     # "Re-run AI" asks for a fresh analysis; "Try again" repeats whichever task failed.
+    if AIUsage.limit_reached(request.user):
+        messages.error(request, "Today's AI limit for the demo has been reached. "
+                       'The preloaded denials show finished examples, or try again tomorrow.')
+        return redirect('denial_detail', pk=denial.pk)
     task = request.POST.get('task') if request.POST.get('task') in ('analyze', 'revise') else denial.ai_task
-    start_ai_task(denial, task)
+    start_ai_task(denial, task, request.user)
     return redirect('denial_detail', pk=denial.pk)
 
 
@@ -254,9 +262,13 @@ def denial_review(request, pk):
         if not answers:
             messages.error(request, 'Answer or check at least one item first.')
             return redirect('denial_review', pk=denial.pk)
+        if AIUsage.limit_reached(request.user):
+            messages.error(request, "Today's AI limit for the demo has been reached. "
+                       'The preloaded denials show finished examples, or try again tomorrow.')
+            return redirect('denial_review', pk=denial.pk)
         denial.review_answers = answers
         denial.save(update_fields=['review_answers_json'])
-        start_revision(denial)
+        start_revision(denial, request.user)
         return redirect('denial_detail', pk=denial.pk)
 
     groups = [

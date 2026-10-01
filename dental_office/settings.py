@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'patient_portal',
     'messaging',
     'imaging',
+    'demo',
     'anymail',
     'axes',
     'auditlog',
@@ -126,6 +127,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'dental_office.context_processors.user_roles',
+                'dental_office.context_processors.demo_mode',
             ],
         },
     },
@@ -279,6 +281,20 @@ ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='').strip()
 AI_PHI_ALLOWED = config('AI_PHI_ALLOWED', default=False, cast=bool)
 # Analysis takes 30-90s, so it runs in a background thread; tests run it inline.
 ANALYZE_DENIALS_IN_BACKGROUND = 'test' not in sys.argv
+# Max AI denial runs per day across all users (superusers exempt). 0 = no cap.
+AI_DAILY_LIMIT = config('AI_DAILY_LIMIT', default=0, cast=int)
+
+# --- Demo phase -------------------------------------------------------------
+# BEFORE REAL PATIENTS: set REQUIRE_2FA=True and DEMO_MODE=False on Railway.
+# Staff must set up 2FA before using the app. Turned off while the live site
+# is a public demo; accounts that already have 2FA are still asked for a code.
+REQUIRE_2FA = config('REQUIRE_2FA', default=True, cast=bool)
+# Public demo: one-click demo logins, a 'fictional data' banner, the demo
+# practice reloaded nightly (wiping all patient data), and no real emails sent.
+DEMO_MODE = config('DEMO_MODE', default=False, cast=bool)
+if DEMO_MODE:
+    # Demo patients have made-up addresses; print emails to the logs instead.
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

@@ -126,6 +126,14 @@
         <a href="/admin/" class="nav-link">
             <i class="bi bi-gear"></i> Admin Panel
         </a>
+        {% if demo_mode %}
+        <form method="post" action="{% url 'reset_demo' %}" onsubmit="return confirm('Reset the demo? This deletes all patients and records and reloads the demo practice.')">
+            {% csrf_token %}
+            <button type="submit" class="nav-link border-0 bg-transparent w-100 text-start">
+                <i class="bi bi-arrow-counterclockwise"></i> Reset Demo
+            </button>
+        </form>
+        {% endif %}
         {% endif %}
     </nav>
     <div style="position:absolute; bottom:1.5rem; left:0; right:0; padding: 0 1.5rem; font-size:0.85rem; color:rgba(255,255,255,0.5);">
@@ -160,6 +168,7 @@
 </div>
 
 <div class="main-content">
+    {% include 'demo/_banner.html' %}
     {% if messages %}
         {% for message in messages %}
             <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">

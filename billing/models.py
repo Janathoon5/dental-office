@@ -213,3 +213,24 @@ class ClaimDenial(SoftDeleteModel):
         if not self.appeal_deadline:
             return None
         return (self.appeal_deadline - timezone.localdate()).days
+
+
+class AIUsage(models.Model):
+    """One AI request (an analysis or a letter update), for the daily cap."""
+    created_at = models.DateTimeField(auto_now_add=True)
+    task = models.CharField(max_length=10)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    @classmethod
+    def limit_reached(cls, user):
+        """True when the site-wide AI_DAILY_LIMIT is used up. Superusers are
+        exempt so the owner can always run a live demo."""
+        from django.utils import timezone
+        limit = settings.AI_DAILY_LIMIT
+        if not limit or user.is_superuser:
+            return False
+        start_of_day = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+        return cls.objects.filter(created_at__gte=start_of_day).count() >= limit

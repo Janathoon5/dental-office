@@ -22,7 +22,7 @@ from django.conf import settings
 from django.db import close_old_connections
 from django.utils import timezone
 
-from .models import ClaimDenial, OfficeSettings
+from .models import AIUsage, ClaimDenial, OfficeSettings
 
 logger = logging.getLogger(__name__)
 
@@ -428,9 +428,10 @@ def _run_in_thread(denial_id):
         close_old_connections()
 
 
-def start_ai_task(denial, task):
+def start_ai_task(denial, task, user=None):
     """Kick off an AI task without blocking the request: a thorough read
     takes 30-90 seconds, longer than the web server's request timeout."""
+    AIUsage.objects.create(task=task, user=user)
     denial.ai_task = task
     denial.ai_status, denial.ai_error, denial.ai_started_at = 'processing', '', timezone.now()
     denial.save(update_fields=['ai_task', 'ai_status', 'ai_error', 'ai_started_at'])
@@ -440,9 +441,9 @@ def start_ai_task(denial, task):
         run_ai_task(denial.pk)
 
 
-def start_analysis(denial):
-    start_ai_task(denial, 'analyze')
+def start_analysis(denial, user=None):
+    start_ai_task(denial, 'analyze', user)
 
 
-def start_revision(denial):
-    start_ai_task(denial, 'revise')
+def start_revision(denial, user=None):
+    start_ai_task(denial, 'revise', user)

@@ -38,6 +38,24 @@
         <button type="submit" class="btn w-100" style="background:#1a3a5c; color:#fff;">Sign In</button>
         <input type="hidden" name="next" value="{{ next }}">
     </form>
+
+    {% if demo_mode %}
+    <div class="mt-4 pt-3 border-top">
+        <div class="text-center fw-semibold mb-1">Just looking around?</div>
+        <p class="text-center text-muted small mb-3">Try the demo practice. No sign-up needed, and all data is fictional.</p>
+        <div class="d-grid gap-2">
+            {% for role, label, icon, blurb in demo_roles %}
+            <form method="post" action="{% url 'demo_login' role %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-primary w-100 text-start d-flex align-items-center gap-2">
+                    <i class="bi {{ icon }} fs-5"></i>
+                    <span><span class="fw-semibold">{{ label }}</span><br><span class="small text-muted">{{ blurb }}</span></span>
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>

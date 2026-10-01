@@ -2,6 +2,7 @@ import io
 import base64
 import pyotp
 import qrcode
+from django.conf import settings
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -136,7 +137,7 @@ def setup_2fa(request):
 
 @login_required
 def disable_2fa(request):
-    if is_staff_member(request.user):
+    if is_staff_member(request.user) and settings.REQUIRE_2FA:
         messages.error(request, '2FA is required for staff accounts and cannot be disabled.')
         return redirect('dashboard')
     if request.method == 'POST':

@@ -39,4 +39,5 @@ urlpatterns = [
     path('messaging/', include('messaging.urls')),
     path('imaging/', include('imaging.urls')),
     path('api/v1/', include('api.urls')),
+    path('demo/', include('demo.urls')),
 ]
