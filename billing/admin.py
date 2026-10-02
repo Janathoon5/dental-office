@@ -10,7 +10,7 @@ class PaymentInline(admin.TabularInline):
     # deleted_by render as plain editable fields in the inline row, and
     # unchecking "is active" would soft-delete without going through
     # delete() (see SoftDeleteAdminMixin for the full rationale).
-    readonly_fields = ['is_active', 'deleted_at', 'deleted_by']
+    readonly_fields = ['is_active', 'deleted_at', 'deleted_by', 'void_reason']
 
 
 @admin.register(Invoice)

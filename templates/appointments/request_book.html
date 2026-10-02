@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+{% block title %}Book Request — Dental Office{% endblock %}
+{% block page_title %}Book Appointment Request{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header fw-semibold"><i class="bi bi-inbox me-2"></i>The Request</div>
+            <div class="card-body">
+                <dl class="row mb-0 small">
+                    <dt class="col-5 text-muted">Name</dt><dd class="col-7">{{ appt_request.first_name }} {{ appt_request.last_name }}</dd>
+                    <dt class="col-5 text-muted">Phone</dt><dd class="col-7">{{ appt_request.phone }}</dd>
+                    <dt class="col-5 text-muted">Email</dt><dd class="col-7 text-break">{{ appt_request.email|default:"—" }}</dd>
+                    <dt class="col-5 text-muted">Would like</dt><dd class="col-7">{{ appt_request.preferred_date|date:"l, M j" }} at {{ appt_request.preferred_time|time:"g:i A" }}</dd>
+                    <dt class="col-5 text-muted">Visit</dt><dd class="col-7">{{ appt_request.get_appointment_type_display }}</dd>
+                    <dt class="col-5 text-muted">Message</dt><dd class="col-7">{{ appt_request.message|default:"—"|linebreaksbr }}</dd>
+                    <dt class="col-5 text-muted">Sent</dt><dd class="col-7">{{ appt_request.submitted_at|date:"M j, g:i A" }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <div class="card mb-3">
+                <div class="card-header fw-semibold"><i class="bi bi-person me-2"></i>1. Patient</div>
+                <div class="card-body">
+                    {% for p in matches %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="patient_choice" id="patient{{ p.pk }}" value="{{ p.pk }}" {% if choice == p.pk|stringformat:"s" %}checked{% endif %}>
+                        <label class="form-check-label" for="patient{{ p.pk }}">
+                            <span class="fw-semibold">{{ p.full_name }}</span>, existing patient
+                            <span class="small text-muted d-block">Born {{ p.date_of_birth|date:"M j, Y" }} · {{ p.phone }}{% if p.email %} · {{ p.email }}{% endif %}</span>
+                        </label>
+                    </div>
+                    {% endfor %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="patient_choice" id="patientNew" value="new" {% if choice == 'new' %}checked{% endif %}>
+                        <label class="form-check-label fw-semibold" for="patientNew">{% if matches %}Someone else: add a new patient{% else %}New patient: add them now{% endif %}</label>
+                    </div>
+
+                    <div id="newPatientFields" class="border rounded p-3 mt-2 bg-light">
+                        {% if new_form.non_field_errors %}
+                        <div class="alert alert-warning py-2">
+                            {% for e in new_form.non_field_errors %}<div><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ e }}</div>{% endfor %}
+                            {% if new_form.duplicate %}
+                            <div class="mt-1">Pick them above if it's the same person, or:</div>
+                            <div class="form-check mt-1">
+                                <input class="form-check-input" type="checkbox" name="new-confirm_duplicate" id="confirmDuplicate">
+                                <label class="form-check-label" for="confirmDuplicate">This is a different person. Add anyway.</label>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        <div class="row g-2">
+                            <div class="col-sm-6">
+                                <label class="form-label small fw-semibold" for="{{ new_form.first_name.id_for_label }}">First name *</label>
+                                {{ new_form.first_name }}
+                                {% for e in new_form.first_name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label small fw-semibold" for="{{ new_form.last_name.id_for_label }}">Last name *</label>
+                                {{ new_form.last_name }}
+                                {% for e in new_form.last_name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label small fw-semibold" for="{{ new_form.date_of_birth.id_for_label }}">Date of birth *</label>
+                                {{ new_form.date_of_birth }}
+                                {% for e in new_form.date_of_birth.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label small fw-semibold" for="{{ new_form.phone.id_for_label }}">Phone *</label>
+                                {{ new_form.phone }}
+                                {% for e in new_form.phone.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label small fw-semibold" for="{{ new_form.email.id_for_label }}">Email</label>
+                                {{ new_form.email }}
+                                {% for e in new_form.email.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                            </div>
+                        </div>
+                        <div class="form-text">Ask for the date of birth when you call. The rest of their details can be added at the first visit.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header fw-semibold"><i class="bi bi-calendar-plus me-2"></i>2. Appointment</div>
+                <div class="card-body">
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger py-2" role="alert">
+                        {% for e in form.non_field_errors %}<div><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ e }}</div>{% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if form.outside_hours or form.outside_hours_ok.value %}
+                    <div class="form-check border rounded bg-light p-3 ps-5 mb-3">
+                        <input class="form-check-input" type="checkbox" name="outside_hours_ok" id="outsideHoursOk" {% if form.outside_hours_ok.value %}checked{% endif %}>
+                        <label class="form-check-label fw-semibold" for="outsideHoursOk">Book anyway, outside office hours</label>
+                    </div>
+                    {% endif %}
+                    <input type="hidden" name="status" value="scheduled">
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label class="form-label fw-semibold" for="{{ form.date.id_for_label }}">Date *</label>
+                            {{ form.date }}
+                            {% for e in form.date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label fw-semibold" for="{{ form.start_time.id_for_label }}">Start time *</label>
+                            {{ form.start_time }}
+                            {% for e in form.start_time.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label fw-semibold" for="{{ form.duration_minutes.id_for_label }}">Minutes</label>
+                            {{ form.duration_minutes }}
+                            {% for e in form.duration_minutes.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-sm-8">
+                            <label class="form-label fw-semibold" for="{{ form.appointment_type.id_for_label }}">Type</label>
+                            {{ form.appointment_type }}
+                            {% for e in form.appointment_type.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold" for="{{ form.dentist.id_for_label }}">Dentist / Provider</label>
+                            {{ form.dentist }}
+                            {% for e in form.dentist.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold" for="{{ form.notes.id_for_label }}">Notes</label>
+                            {{ form.notes }}
+                            {% for e in form.notes.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Book and Approve</button>
+                <a href="{% url 'request_list' %}" class="btn btn-outline-secondary">Back to Requests</a>
+            </div>
+            <p class="small text-muted mt-2">If there's an email address, the patient is emailed a confirmation with the time and the office's phone number.</p>
+        </form>
+    </div>
+</div>
+
+<style>
+    form select, form input[type=date], form input[type=time], form input[type=number],
+    form input[type=text], form input[type=email], form input[type=tel], form textarea {
+        display: block; width: 100%;
+        padding: .375rem .75rem;
+        font-size: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: .375rem;
+    }
+</style>
+<script>
+(function () {
+    // Only show the new-patient fields when "new patient" is picked.
+    var box = document.getElementById('newPatientFields');
+    function sync() {
+        var picked = document.querySelector('input[name=patient_choice]:checked');
+        box.style.display = picked && picked.value === 'new' ? '' : 'none';
+    }
+    document.querySelectorAll('input[name=patient_choice]').forEach(function (r) { r.addEventListener('change', sync); });
+    sync();
+})();
+</script>
+{% endblock %}

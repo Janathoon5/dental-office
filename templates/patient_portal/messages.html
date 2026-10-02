@@ -1,0 +1,53 @@
+{% extends "patient_portal/base.html" %}
+
+{% block title %}Messages — Dental Office{% endblock %}
+{% block page_title %}Messages{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm" style="max-width: 760px;">
+    <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-chat-dots me-1"></i> Messages with the office
+    </div>
+    <div class="card-body">
+        {% if thread %}
+        <div id="thread" class="mb-3" style="max-height: 28rem; overflow-y: auto;">
+            {% for msg in thread %}
+            {% if msg.sender_id == request.user.id %}
+            <div class="d-flex mb-2 justify-content-end">
+                <div class="rounded p-2 px-3 bg-primary text-white" style="max-width: 80%;">
+                    <div class="small fw-semibold">You</div>
+                    <div>{{ msg.body|linebreaksbr }}</div>
+                    <div class="small text-white-50">{{ msg.sent_at|date:"M j, g:i A" }}</div>
+                </div>
+            </div>
+            {% else %}
+            <div class="d-flex mb-2">
+                <div class="rounded p-2 px-3 bg-light" style="max-width: 80%;">
+                    <div class="small fw-semibold text-muted">{{ msg.sender.get_full_name|default:"The office" }}</div>
+                    <div>{{ msg.body|linebreaksbr }}</div>
+                    <div class="small text-muted">{{ msg.sent_at|date:"M j, g:i A" }}</div>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-3">No messages yet. Send the office a question below.</p>
+        {% endif %}
+        <form method="post" class="d-flex flex-column gap-2">
+            {% csrf_token %}
+            <label for="messageBody" class="visually-hidden">Your message</label>
+            <textarea name="body" id="messageBody" class="form-control" rows="3" maxlength="{{ max_length }}" placeholder="Type a message to the office..." required></textarea>
+            <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                <span class="small text-muted">For emergencies, please call the office instead.</span>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-send me-1"></i>Send</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    // Start at the newest message.
+    var thread = document.getElementById('thread');
+    if (thread) { thread.scrollTop = thread.scrollHeight; }
+</script>
+{% endblock %}

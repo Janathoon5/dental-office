@@ -13,6 +13,7 @@ from appointments.models import Appointment
 from .models import AIUsage, ClaimDenial, Invoice, InvoiceLineItem, OfficeSettings, Payment
 from .forms import DenialUpdateForm, DenialUploadForm, InvoiceForm, InvoiceLineItemForm, PaymentForm
 from .cdt import COMMON_CODES
+from dental_office.templatetags.office import money
 from .packet import build_packet, packet_options
 from .ai import start_ai_task, start_analysis, start_revision
 from .placeholders import CATEGORY_LABELS, count_by_category, find_placeholders
@@ -34,10 +35,14 @@ def invoice_list(request):
 def invoice_detail(request, pk):
     invoice = get_object_or_404(Invoice, pk=pk)
     accessed.send(sender=Invoice, instance=invoice)
-    payment_form = PaymentForm()
+    return _invoice_page(request, invoice)
+
+
+def _invoice_page(request, invoice, payment_form=None):
     return render(request, 'billing/invoice_detail.html', {
         'invoice': invoice,
-        'payment_form': payment_form,
+        'payment_form': payment_form or PaymentForm(invoice=invoice),
+        'voided_payments': invoice.voided_payments(),
         'line_items': invoice.line_items.all(),
         'line_form': InvoiceLineItemForm(initial={
             'service_date': (invoice.appointment.date if invoice.appointment else timezone.localdate()).isoformat(),
@@ -116,20 +121,40 @@ def line_item_delete(request, pk):
 def payment_add(request, invoice_pk):
     invoice = get_object_or_404(Invoice, pk=invoice_pk)
     if request.method == 'POST':
-        form = PaymentForm(request.POST)
-        if form.is_valid():
-            payment = form.save(commit=False)
-            payment.invoice = invoice
-            payment.save()
-            if invoice.balance_due() <= 0:
-                invoice.status = 'paid'
-            elif invoice.amount_paid() > 0:
-                invoice.status = 'partial'
-            invoice.save()
-        else:
-            errors = ' '.join(e for field in form.errors.values() for e in field)
-            messages.error(request, f'Payment not recorded: {errors}')
+        form = PaymentForm(request.POST, invoice=invoice)
+        if not form.is_valid():
+            # Show the form again with the amount kept, so a typo can be
+            # fixed or an overpayment confirmed.
+            return _invoice_page(request, invoice, payment_form=form)
+        payment = form.save(commit=False)
+        payment.invoice = invoice
+        payment.save()
+        invoice.update_status()
+        text = f'Recorded a {money(payment.amount)} {payment.get_method_display().lower()} payment.'
+        if invoice.credit():
+            text += f' {money(invoice.credit())} is kept as a credit.'
+        messages.success(request, text)
     return redirect('invoice_detail', pk=invoice_pk)
+
+
+@staff_required
+@require_POST
+def payment_void(request, pk):
+    """Undo a payment recorded by mistake. It stays on the invoice, crossed
+    out, with who voided it, when and why."""
+    payment = get_object_or_404(Payment, pk=pk)
+    invoice = payment.invoice
+    reason = request.POST.get('reason', '').strip()[:200]
+    if not reason:
+        messages.error(request, 'Type a reason to void a payment, e.g. "Entered 3600 instead of 36.00".')
+        return redirect('invoice_detail', pk=invoice.pk)
+    payment.void_reason = reason
+    payment.save(update_fields=['void_reason'])
+    payment.delete(deleted_by=request.user)
+    invoice.update_status()
+    messages.success(request, f'Voided the {money(payment.amount)} payment from {payment.date:%b} {payment.date.day}. '
+                              f'The balance due is now {money(invoice.balance_due())}.')
+    return redirect('invoice_detail', pk=invoice.pk)
 
 
 @staff_required

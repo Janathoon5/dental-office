@@ -24,21 +24,29 @@
                     {% endif %}
 
                     <dt class="col-5 text-muted">Subtotal</dt>
-                    <dd class="col-7">${{ invoice.subtotal }}</dd>
+                    <dd class="col-7">{{ invoice.subtotal|money }}</dd>
 
                     <dt class="col-5 text-muted">Insurance Covers</dt>
-                    <dd class="col-7 text-success">-${{ invoice.insurance_amount }}</dd>
+                    <dd class="col-7 text-success">-{{ invoice.insurance_amount|money }}</dd>
 
                     <dt class="col-5 text-muted">Patient Owes</dt>
-                    <dd class="col-7 fw-bold">${{ invoice.patient_owes }}</dd>
+                    <dd class="col-7 fw-bold">{{ invoice.patient_owes|money }}</dd>
 
                     <dt class="col-5 text-muted">Amount Paid</dt>
-                    <dd class="col-7 text-success">-${{ invoice.amount_paid }}</dd>
+                    <dd class="col-7 text-success">-{{ invoice.amount_paid|money }}</dd>
 
+                    {% if invoice.credit %}
+                    <dt class="col-5 text-muted">Credit</dt>
+                    <dd class="col-7 fw-bold fs-5 text-success">
+                        {{ invoice.credit|money }}
+                        <div class="small fw-normal text-muted">Paid beyond what's owed</div>
+                    </dd>
+                    {% else %}
                     <dt class="col-5 text-muted">Balance Due</dt>
                     <dd class="col-7 fw-bold fs-5 {% if invoice.balance_due > 0 %}text-danger{% else %}text-success{% endif %}">
-                        ${{ invoice.balance_due }}
+                        {{ invoice.balance_due|money }}
                     </dd>
+                    {% endif %}
 
                     <dt class="col-5 text-muted">Status</dt>
                     <dd class="col-7">
@@ -112,7 +120,7 @@
                                 <td>{{ line.tooth_number|default:"—" }}</td>
                                 <td>{{ line.surfaces|default:"—" }}</td>
                                 <td>{{ line.description }}</td>
-                                <td class="text-end text-nowrap">${{ line.fee }}</td>
+                                <td class="text-end text-nowrap">{{ line.fee|money }}</td>
                                 <td class="text-end pe-2">
                                     <form method="post" action="{% url 'line_item_delete' line.pk %}" onsubmit="return confirm('Remove {{ line.cdt_code }} from this invoice?')">
                                         {% csrf_token %}
@@ -122,7 +130,7 @@
                             </tr>
                             {% endfor %}
                         </tbody>
-                        <tfoot><tr><td colspan="5" class="ps-3 fw-semibold">Total</td><td class="text-end fw-semibold">${{ invoice.subtotal }}</td><td></td></tr></tfoot>
+                        <tfoot><tr><td colspan="5" class="ps-3 fw-semibold">Total</td><td class="text-end fw-semibold">{{ invoice.subtotal|money }}</td><td></td></tr></tfoot>
                     </table>
                 </div>
                 {% else %}
@@ -181,19 +189,43 @@
         <div class="card mb-3">
             <div class="card-header fw-semibold"><i class="bi bi-cash-coin me-2"></i>Payment History</div>
             <div class="card-body p-0">
-                {% if invoice.payments.all %}
+                {% if invoice.payments.all or voided_payments %}
                     <div class="table-responsive">
-                    <table class="table mb-0">
+                    <table class="table mb-0 align-middle">
                         <thead class="table-light">
-                            <tr><th>Date</th><th>Amount</th><th>Method</th><th>Notes</th></tr>
+                            <tr><th>Date</th><th>Amount</th><th>Method</th><th>Notes</th><th><span class="visually-hidden">Actions</span></th></tr>
                         </thead>
                         <tbody>
                             {% for p in invoice.payments.all %}
                             <tr>
-                                <td>{{ p.date|date:"M j, Y" }}</td>
-                                <td class="text-success fw-semibold">${{ p.amount }}</td>
+                                <td class="text-nowrap">{{ p.date|date:"M j, Y" }}</td>
+                                <td class="text-success fw-semibold">{{ p.amount|money }}</td>
                                 <td>{{ p.get_method_display }}</td>
                                 <td>{{ p.notes|default:"—" }}</td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#void{{ p.pk }}" aria-expanded="false" aria-controls="void{{ p.pk }}">Void</button>
+                                </td>
+                            </tr>
+                            <tr class="collapse" id="void{{ p.pk }}">
+                                <td colspan="5" class="bg-light">
+                                    <form method="post" action="{% url 'payment_void' p.pk %}" class="d-flex flex-wrap gap-2 align-items-center">
+                                        {% csrf_token %}
+                                        <label class="small fw-semibold" for="reason{{ p.pk }}">Why void this {{ p.amount|money }} payment?</label>
+                                        <input type="text" name="reason" id="reason{{ p.pk }}" class="flex-grow-1" style="width:auto; min-width:12rem;" maxlength="200" required placeholder="e.g. Typed 3600 instead of 36.00">
+                                        <button type="submit" class="btn btn-sm btn-danger">Void Payment</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% for p in voided_payments %}
+                            <tr class="text-muted">
+                                <td class="text-nowrap"><s>{{ p.date|date:"M j, Y" }}</s></td>
+                                <td><s>{{ p.amount|money }}</s></td>
+                                <td><s>{{ p.get_method_display }}</s></td>
+                                <td colspan="2" class="small">
+                                    <span class="badge bg-secondary">Voided</span>
+                                    {{ p.deleted_at|date:"M j" }}{% if p.deleted_by %} by {{ p.deleted_by.get_full_name|default:p.deleted_by.username }}{% endif %}: {{ p.void_reason|default:"no reason given" }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -210,20 +242,35 @@
         <div class="card">
             <div class="card-header fw-semibold"><i class="bi bi-plus-circle me-2"></i>Record Payment</div>
             <div class="card-body">
-                <form method="post" action="{% url 'payment_add' invoice.pk %}" novalidate>
+                <form method="post" action="{% url 'payment_add' invoice.pk %}" novalidate id="paymentForm">
                     {% csrf_token %}
+                    {% if payment_form.non_field_errors %}
+                    <div class="alert alert-warning py-2" role="alert">
+                        {% for e in payment_form.non_field_errors %}<div><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ e }}</div>{% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if payment_form.overpayment or payment_form.allow_credit.value %}
+                    <div class="form-check border rounded bg-light p-3 ps-5 mb-3">
+                        <input class="form-check-input" type="checkbox" name="allow_credit" id="allowCredit" {% if payment_form.allow_credit.value %}checked{% endif %}>
+                        <label class="form-check-label fw-semibold" for="allowCredit">Keep the extra as a credit</label>
+                    </div>
+                    {% endif %}
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">Amount ($) *</label>
+                            <label class="form-label fw-semibold" for="{{ payment_form.amount.id_for_label }}">Amount ($) *</label>
                             {{ payment_form.amount }}
+                            {% for e in payment_form.amount.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                            <div class="form-text">Balance due: {{ invoice.balance_due|money }}</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">Method</label>
+                            <label class="form-label fw-semibold" for="{{ payment_form.method.id_for_label }}">Method</label>
                             {{ payment_form.method }}
+                            {% for e in payment_form.method.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold">Notes</label>
+                            <label class="form-label fw-semibold" for="{{ payment_form.notes.id_for_label }}">Notes</label>
                             {{ payment_form.notes }}
+                            {% for e in payment_form.notes.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                         </div>
                     </div>
                     <button type="submit" class="btn btn-success mt-3">Record Payment</button>

@@ -7,6 +7,7 @@ urlpatterns = [
     path('request/', views.appointment_request, name='appointment_request'),
     path('requests/', views.request_list, name='request_list'),
     path('requests/<int:pk>/update/', views.request_update, name='request_update'),
+    path('requests/<int:pk>/book/', views.request_book, name='request_book'),
     path('reminders/', views.reminders_dashboard, name='reminders_dashboard'),
     path('reminders/send/', views.send_reminders_now, name='send_reminders_now'),
     path('recalls/', views.recall_list, name='recall_list'),

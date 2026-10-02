@@ -79,7 +79,7 @@
                     {% for item in t.planned %}
                     <div class="small mb-1">
                         {{ item.procedure }}
-                        <span class="text-muted">· ${{ item.estimated_cost }} · <a href="{% url 'plan_detail' item.plan.pk %}">{{ item.plan.title }}</a></span>
+                        <span class="text-muted">· {{ item.estimated_cost|money }} · <a href="{% url 'plan_detail' item.plan.pk %}">{{ item.plan.title }}</a></span>
                     </div>
                     {% empty %}
                     <div class="small text-muted">None</div>

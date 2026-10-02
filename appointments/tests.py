@@ -1,6 +1,9 @@
 import io
 import datetime
 
+from django.core import mail
+from django.core.management import call_command
+
 from django.contrib.auth.models import Group, User
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -78,6 +81,15 @@ def timezone_today_plus(days):
     return timezone.localdate() + datetime.timedelta(days=days)
 
 
+def weekday_at_least(days):
+    """The first Monday-Friday at least `days` from today, so a 10 AM test
+    booking is inside office hours whatever day the tests run."""
+    day = timezone_today_plus(days)
+    while day.weekday() >= 5:
+        day += datetime.timedelta(days=1)
+    return day
+
+
 class AppointmentDoubleBookingTests(TestCase):
     """Regression guard: a dentist must not be bookable for two overlapping
     appointments — previously AppointmentForm had no overlap check at all."""
@@ -93,7 +105,7 @@ class AppointmentDoubleBookingTests(TestCase):
         )
         self.dentist_user = User.objects.create_user(username='drtooth', password='testpass123')
         StaffProfile.objects.create(user=self.dentist_user, role='dentist')
-        self.date = timezone_today_plus(3)
+        self.date = weekday_at_least(3)
         Appointment.objects.create(
             patient=self.patient, dentist=self.dentist_user,
             date=self.date, start_time=datetime.time(10, 0), duration_minutes=60,
@@ -136,7 +148,7 @@ class AppointmentRequestRateLimitTests(TestCase):
         url = reverse('appointment_request')
         statuses = [self.client.get(url).status_code for _ in range(11)]
         self.assertIn(200, statuses[:10])
-        self.assertEqual(statuses[-1], 403)
+        self.assertEqual(statuses[-1], 429)
 
 
 class RecallTests(TestCase):
@@ -338,7 +350,7 @@ class AppointmentFormFixesTests(TestCase):
 
     def test_bad_duration_message_is_shown(self):
         response = self.client.post(reverse('appointment_add'), self._data(duration_minutes='-30'))
-        self.assertContains(response, 'Ensure this value is greater than or equal to 0.')
+        self.assertContains(response, 'A visit has to be at least 5 minutes long.')
 
     def test_past_appointment_can_be_marked_completed(self):
         past = Appointment.objects.create(patient=self.patient, dentist=self.dentist,
@@ -389,3 +401,206 @@ class SendNowMessageTests(TestCase):
     def test_recall_result_is_a_readable_sentence(self):
         response = self.client.post(reverse('send_recalls_now'), follow=True)
         self.assertContains(response, 'No recall emails were due.', count=1)
+
+
+def next_weekday(weekday, at_least=1):
+    """The next date (at least `at_least` days away) on the given weekday,
+    0 = Monday ... 6 = Sunday."""
+    day = timezone_today_plus(at_least)
+    while day.weekday() != weekday:
+        day += datetime.timedelta(days=1)
+    return day
+
+
+class BookingRulesTests(TestCase):
+    """From the live-site test: staff could book 0-minute and 10-hour visits,
+    Sundays, after closing, and the year 2099."""
+
+    def setUp(self):
+        self.patient = Patient.objects.create(first_name='Rule', last_name='Patient',
+                                              date_of_birth=datetime.date(1990, 1, 1), phone='555-0000')
+        self.dentist = User.objects.create_user('drrules', password='pw', first_name='Elena', last_name='Park')
+        StaffProfile.objects.create(user=self.dentist, role='dentist')
+
+    def _form(self, **overrides):
+        data = {'patient': self.patient.pk, 'dentist': self.dentist.pk,
+                'date': next_weekday(1).isoformat(), 'start_time': '10:00', 'duration_minutes': 60,
+                'appointment_type': 'checkup', 'status': 'scheduled', 'notes': ''}
+        data.update(overrides)
+        return AppointmentForm(data=data)
+
+    def test_normal_weekday_visit_is_fine(self):
+        self.assertTrue(self._form().is_valid())
+
+    def test_impossible_lengths_are_blocked(self):
+        self.assertIn('at least 5 minutes', str(self._form(duration_minutes=0).errors))
+        self.assertIn('at most 4 hours', str(self._form(duration_minutes=600).errors))
+
+    def test_far_future_year_is_blocked(self):
+        form = self._form(date='2099-06-02')
+        self.assertFalse(form.is_valid())
+        self.assertIn('Check the year', str(form.errors['date']))
+
+    def test_outside_hours_needs_book_anyway(self):
+        sunday = self._form(date=next_weekday(6).isoformat())
+        self.assertFalse(sunday.is_valid())
+        self.assertIn('closed on Sundays', str(sunday.errors))
+        late = self._form(start_time='16:30')  # a Tuesday visit running to 5:30 PM
+        self.assertFalse(late.is_valid())
+        self.assertIn('4:30 PM – 5:30 PM', str(late.errors))
+        self.assertTrue(self._form(date=next_weekday(6).isoformat(), outside_hours_ok='on').is_valid())
+
+    def test_book_anyway_box_appears_on_the_page(self):
+        staff = User.objects.create_user('deskrules', password='pw')
+        StaffProfile.objects.create(user=staff, role='receptionist')
+        TOTPDevice.objects.create(user=staff, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        self.client.force_login(staff)
+        data = {'patient': self.patient.pk, 'dentist': self.dentist.pk, 'date': next_weekday(6).isoformat(),
+                'start_time': '10:00', 'duration_minutes': 60, 'appointment_type': 'checkup',
+                'status': 'scheduled', 'notes': ''}
+        page = self.client.post(reverse('appointment_add'), data)
+        self.assertContains(page, 'Book anyway, outside office hours')
+        response = self.client.post(reverse('appointment_add'), {**data, 'outside_hours_ok': 'on'})
+        self.assertEqual(response.status_code, 302)
+
+    def test_updating_an_existing_out_of_hours_visit_does_not_nag(self):
+        appt = Appointment.objects.create(patient=self.patient, dentist=self.dentist, date=next_weekday(6),
+                                          start_time=datetime.time(10, 0), duration_minutes=60)
+        form = AppointmentForm(instance=appt, data={
+            'patient': self.patient.pk, 'dentist': self.dentist.pk, 'date': appt.date.isoformat(),
+            'start_time': '10:00', 'duration_minutes': 60, 'appointment_type': 'checkup',
+            'status': 'scheduled', 'notes': 'Emergency, approved by Dr. Park'})
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_public_request_form_follows_office_hours(self):
+        response = self.client.post(reverse('appointment_request'), {
+            'first_name': 'Pat', 'last_name': 'Lee', 'phone': '(555) 222-3333', 'email': '',
+            'preferred_date': next_weekday(6).isoformat(), 'preferred_time': '10:00',
+            'appointment_type': 'checkup', 'message': ''})
+        self.assertContains(response, 'closed on Sundays')
+        self.assertFalse(AppointmentRequest.objects.exists())
+
+
+class RequestBookingTests(TestCase):
+    """From the live-site test: Approve only changed a label. Now it books
+    the visit, adds the patient if needed, and emails a confirmation."""
+
+    def setUp(self):
+        from billing.models import OfficeSettings
+        office = OfficeSettings.load()
+        office.office_name, office.phone = 'Bright Smiles Dental', '(555) 010-4567'
+        office.address = '123 Main St\nSpringfield, IL 62701'
+        office.save()
+        self.dentist = User.objects.create_user('drbook', password='pw', first_name='Elena', last_name='Park')
+        StaffProfile.objects.create(user=self.dentist, role='dentist')
+        self.staff = User.objects.create_user('deskbook', password='pw')
+        StaffProfile.objects.create(user=self.staff, role='receptionist')
+        TOTPDevice.objects.create(user=self.staff, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        self.client.force_login(self.staff)
+        self.day = next_weekday(2)
+        self.req = AppointmentRequest.objects.create(
+            first_name='Olivia', last_name='Grant', phone='(555) 010-2233', email='olivia@example.com',
+            preferred_date=self.day, preferred_time=datetime.time(10, 0), appointment_type='consultation',
+            message='Chipped front tooth')
+
+    def _book(self, **overrides):
+        data = {'patient_choice': 'new', 'new-first_name': 'Olivia', 'new-last_name': 'Grant',
+                'new-date_of_birth': '1992-04-18', 'new-phone': '(555) 010-2233', 'new-email': 'olivia@example.com',
+                'date': self.day.isoformat(), 'start_time': '10:00', 'duration_minutes': 60,
+                'appointment_type': 'consultation', 'status': 'scheduled', 'dentist': self.dentist.pk,
+                'notes': 'Chipped front tooth'}
+        data.update(overrides)
+        return self.client.post(reverse('request_book', args=[self.req.pk]), data)
+
+    def test_page_is_filled_in_from_the_request(self):
+        page = self.client.get(reverse('request_book', args=[self.req.pk]))
+        self.assertContains(page, f'value="{self.day.isoformat()}"')
+        self.assertContains(page, 'value="Olivia"')
+        self.assertContains(page, 'Chipped front tooth')
+
+    def test_booking_a_new_patient(self):
+        response = self._book()
+        appt = Appointment.objects.get()
+        self.assertRedirects(response, reverse('appointment_detail', args=[appt.pk]))
+        patient = Patient.objects.get(first_name='Olivia')
+        self.assertEqual((appt.patient, appt.date, appt.start_time), (patient, self.day, datetime.time(10, 0)))
+        self.req.refresh_from_db()
+        self.assertEqual((self.req.status, self.req.patient, self.req.appointment), ('approved', patient, appt))
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ['olivia@example.com'])
+        self.assertIn('Bright Smiles Dental', email.from_email)
+        self.assertIn('is confirmed', email.subject)
+        self.assertIn(f'{self.day:%B} {self.day.day}, {self.day.year}', email.body)
+        self.assertIn('(555) 010-4567', email.body)
+        self.assertIn('Dr. Elena Park', email.body)
+        page = self.client.get(reverse('request_list'))
+        self.assertContains(page, 'Booked ')
+
+    def test_new_patient_needs_a_birth_date(self):
+        response = self._book(**{'new-date_of_birth': ''})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Appointment.objects.exists())
+        self.assertFalse(Patient.objects.exists())
+
+    def test_existing_patient_is_suggested_and_used(self):
+        patient = Patient.objects.create(first_name='Olivia', last_name='Grant', date_of_birth=datetime.date(1992, 4, 18),
+                                         phone='555.010.2233', email='')
+        page = self.client.get(reverse('request_book', args=[self.req.pk]))
+        self.assertContains(page, f'value="{patient.pk}" checked')
+        self._book(patient_choice=str(patient.pk))
+        self.assertEqual(Patient.objects.count(), 1)
+        self.assertEqual(Appointment.objects.get().patient, patient)
+
+    def test_double_booking_still_blocked(self):
+        other = Patient.objects.create(first_name='Busy', last_name='Slot', phone='555-0000',
+                                       date_of_birth=datetime.date(1980, 1, 1))
+        Appointment.objects.create(patient=other, dentist=self.dentist, date=self.day, start_time=datetime.time(10, 0))
+        response = self._book()
+        self.assertContains(response, 'already has an appointment')
+        self.assertEqual(Appointment.objects.count(), 1)
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'pending')
+
+    def test_old_approve_button_no_longer_approves_without_booking(self):
+        self.client.post(reverse('request_update', args=[self.req.pk]), {'status': 'approved'})
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'pending')
+
+    def test_handled_requests_can_not_be_booked_twice(self):
+        self.req.status = 'declined'
+        self.req.save()
+        response = self.client.get(reverse('request_book', args=[self.req.pk]), follow=True)
+        self.assertContains(response, 'already declined')
+
+
+class PatientEmailContentTests(TestCase):
+    """From the live-site test: emails had no office name or phone number,
+    and dates read "October 02"."""
+
+    def setUp(self):
+        from billing.models import OfficeSettings
+        office = OfficeSettings.load()
+        office.office_name, office.phone = 'Bright Smiles Dental', '(555) 010-4567'
+        office.address = '123 Main St\nSpringfield, IL 62701'
+        office.save()
+        self.patient = Patient.objects.create(first_name='Nora', last_name='Kelly', phone='555-0000',
+                                              email='nora@example.com', date_of_birth=datetime.date(1954, 7, 7))
+
+    def test_reminder_names_the_office_and_how_to_reach_it(self):
+        day = timezone_today_plus(1)
+        Appointment.objects.create(patient=self.patient, date=day, start_time=datetime.time(9, 0))
+        call_command('send_reminders', stdout=io.StringIO())
+        email = mail.outbox[0]
+        self.assertTrue(email.from_email.startswith('Bright Smiles Dental <'))
+        self.assertIn(f'{day:%B} {day.day}, {day.year}', email.body)
+        self.assertNotIn(f'{day:%B} 0', email.body)
+        self.assertIn('call us at (555) 010-4567', email.body)
+        self.assertIn('123 Main St', email.body)
+
+    def test_recall_names_the_office(self):
+        Appointment.objects.create(patient=self.patient, date=timezone_today_plus(-400), start_time=datetime.time(9, 0),
+                                   appointment_type='cleaning', status='completed')
+        call_command('send_recall_reminders', stdout=io.StringIO())
+        email = mail.outbox[0]
+        self.assertIn('Bright Smiles Dental', email.subject)
+        self.assertIn('(555) 010-4567', email.body)

@@ -1,6 +1,6 @@
 from django.conf import settings
 
-from dental_office.roles import is_dentist, is_receptionist, is_staff_member
+from dental_office.roles import get_patient_profile, is_clinical_staff, is_dentist, is_patient, is_receptionist, is_staff_member
 
 
 DEMO_ROLES = [
@@ -23,6 +23,7 @@ def user_roles(request):
     admin = request.user.is_superuser
     dentist = admin or is_dentist(request.user)
     receptionist = is_receptionist(request.user)
+    clinical = admin or is_clinical_staff(request.user)
 
     pending_count = 0
     if is_staff_member(request.user):
@@ -33,9 +34,19 @@ def user_roles(request):
         except Exception:
             pass
 
+    unread_messages = 0
+    if is_patient(request.user):
+        profile = get_patient_profile(request.user)
+        conversation = getattr(profile, 'conversation', None) if profile else None
+        if conversation is not None:
+            unread_messages = conversation.messages.filter(read_at__isnull=True).exclude(sender=request.user).count()
+
     return {
+        'portal_unread_messages': unread_messages,
         'user_is_dentist': dentist,
         'user_is_receptionist': receptionist,
+        'user_is_hygienist': clinical and not dentist,
+        'user_is_clinical': clinical,
         'user_is_admin': admin,
         'pending_requests_count': pending_count,
     }

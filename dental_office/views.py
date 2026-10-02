@@ -7,7 +7,7 @@ import json
 from patients.models import Patient
 from appointments.models import Appointment
 from billing.models import Invoice
-from dental_office.roles import staff_required, dentist_required, is_dentist
+from dental_office.roles import staff_required, dentist_required, is_clinical_staff
 
 
 # Bump these by hand whenever the corresponding template's wording actually
@@ -60,7 +60,7 @@ def dashboard(request):
     overdue_recalls = len(recall_lists(today)['overdue'])
 
     my_appointments_today = None
-    if is_dentist(request.user):
+    if is_clinical_staff(request.user):
         my_appointments_today = todays_appointments.filter(dentist=request.user).count()
 
     return render(request, 'dashboard.html', {

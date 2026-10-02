@@ -3,8 +3,10 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="row g-3 mb-4">
-    <div class="col-sm-6 col-xl">
+{# On phones today's schedule comes first; the summary cards follow, two per row. #}
+<div class="d-flex flex-column gap-4">
+<div class="row g-3 order-2 order-md-1">
+    <div class="col-6 col-md-4 col-xl">
         <div class="card stat-card h-100">
             <div class="card-body">
                 <div class="text-muted small mb-1">Total Patients</div>
@@ -12,7 +14,7 @@
             </div>
         </div>
     </div>
-    <div class="col-sm-6 col-xl">
+    <div class="col-6 col-md-4 col-xl">
         <div class="card stat-card h-100">
             <div class="card-body">
                 <div class="text-muted small mb-1">Today's Appointments</div>
@@ -21,7 +23,7 @@
         </div>
     </div>
     {% if my_appointments_today is not None %}
-    <div class="col-sm-6 col-xl">
+    <div class="col-6 col-md-4 col-xl">
         <div class="card h-100" style="border-left:4px solid #0dcaf0;">
             <div class="card-body">
                 <div class="text-muted small mb-1">My Schedule Today</div>
@@ -30,7 +32,7 @@
         </div>
     </div>
     {% endif %}
-    <div class="col-sm-6 col-xl">
+    <div class="col-6 col-md-4 col-xl">
         <div class="card stat-card h-100">
             <div class="card-body">
                 <div class="text-muted small mb-1">This Week</div>
@@ -38,7 +40,7 @@
             </div>
         </div>
     </div>
-    <div class="col-sm-6 col-xl">
+    <div class="col-6 col-md-4 col-xl">
         <div class="card stat-card h-100">
             <div class="card-body">
                 <div class="text-muted small mb-1">Upcoming Scheduled</div>
@@ -46,7 +48,8 @@
             </div>
         </div>
     </div>
-    <div class="col-sm-6 col-xl">
+    <div class="col-6 col-md-4 col-xl">
+        <a href="{% url 'request_list' %}" class="text-decoration-none">
         <div class="card h-100" style="border-left:4px solid {% if pending_requests > 0 %}#ffc107{% else %}#1a3a5c{% endif %};">
             <div class="card-body">
                 <div class="text-muted small mb-1">Pending Requests</div>
@@ -55,8 +58,9 @@
                 </div>
             </div>
         </div>
+        </a>
     </div>
-    <div class="col-sm-6 col-xl">
+    <div class="col-6 col-md-4 col-xl">
         <a href="{% url 'recall_list' %}" class="text-decoration-none">
         <div class="card h-100" style="border-left:4px solid {% if overdue_recalls > 0 %}#dc3545{% else %}#1a3a5c{% endif %};">
             <div class="card-body">
@@ -70,38 +74,39 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
+<div class="card order-1 order-md-2">
+    <div class="card-header d-flex justify-content-between align-items-center gap-2">
         <span class="fw-semibold"><i class="bi bi-calendar-day me-2"></i>Today's Schedule — {{ today|date:"l, F j" }}</span>
-        <a href="{% url 'appointment_add' %}?date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-primary">
-            <i class="bi bi-plus-lg"></i> Book Appointment
+        <a href="{% url 'appointment_add' %}?date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-primary text-nowrap">
+            <i class="bi bi-plus-lg"></i> Book<span class="d-none d-sm-inline"> Appointment</span>
         </a>
     </div>
     <div class="card-body p-0">
         {% if todays_appointments %}
             <div class="table-responsive">
-                <table class="table table-hover mb-0">
+                <table class="table table-hover mb-0 align-middle">
                     <thead class="table-light">
                         <tr>
                             <th>Time</th>
                             <th>Patient</th>
-                            <th>Type</th>
-                            <th>Dentist</th>
+                            <th class="d-none d-md-table-cell">Type</th>
+                            <th class="d-none d-md-table-cell">Dentist</th>
                             <th>Status</th>
-                            <th></th>
+                            <th><span class="visually-hidden">Actions</span></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for appt in todays_appointments %}
                         <tr>
-                            <td class="fw-semibold">{{ appt.start_time|time:"g:i A" }}</td>
+                            <td class="fw-semibold text-nowrap">{{ appt.start_time|time:"g:i A" }}</td>
                             <td>
                                 <a href="{% url 'patient_detail' appt.patient.pk %}" class="text-decoration-none fw-semibold">
                                     {{ appt.patient.full_name }}
                                 </a>
+                                <div class="small text-muted d-md-none">{{ appt.get_appointment_type_display }}{% if appt.dentist %} · {{ appt.dentist.get_full_name }}{% endif %}</div>
                             </td>
-                            <td>{{ appt.get_appointment_type_display }}</td>
-                            <td>{{ appt.dentist.get_full_name|default:"—" }}</td>
+                            <td class="d-none d-md-table-cell">{{ appt.get_appointment_type_display }}</td>
+                            <td class="d-none d-md-table-cell">{{ appt.dentist.get_full_name|default:"—" }}</td>
                             <td>
                                 <span class="badge badge-{{ appt.status }}">{{ appt.get_status_display }}</span>
                             </td>
@@ -121,5 +126,6 @@
             </div>
         {% endif %}
     </div>
+</div>
 </div>
 {% endblock %}

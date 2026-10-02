@@ -31,7 +31,7 @@
                             <div class="small text-muted">Invoice #{{ d.invoice.pk }}</div>
                         </td>
                         <td>{{ d.insurer_name|default:"—" }}</td>
-                        <td class="text-nowrap">{% if d.amount_denied is not None %}${{ d.amount_denied }}{% else %}—{% endif %}</td>
+                        <td class="text-nowrap">{% if d.amount_denied is not None %}{{ d.amount_denied|money }}{% else %}—{% endif %}</td>
                         <td>
                             {% if d.ai_status == 'processing' %}<span class="badge bg-info text-dark">Analyzing…</span>
                             {% elif d.ai_status == 'failed' %}<span class="badge bg-danger">AI failed</span>

@@ -13,7 +13,6 @@
                     <tr>
                         <th>Submitted</th>
                         <th>Name</th>
-                        <th>Phone</th>
                         <th>Preferred Date</th>
                         <th>Type</th>
                         <th>Message</th>
@@ -25,8 +24,7 @@
                     {% for req in requests %}
                     <tr>
                         <td class="text-muted small">{{ req.submitted_at|date:"M j, g:i A" }}</td>
-                        <td class="fw-semibold">{{ req.first_name }} {{ req.last_name }}<br><small class="text-muted">{{ req.phone }}</small></td>
-                        <td>{{ req.phone }}</td>
+                        <td class="fw-semibold">{{ req.first_name }} {{ req.last_name }}<br><small class="text-muted">{{ req.phone }}{% if req.email %}<br>{{ req.email }}{% endif %}</small></td>
                         <td>{{ req.preferred_date|date:"M j, Y" }} at {{ req.preferred_time|time:"g:i A" }}</td>
                         <td>{{ req.get_appointment_type_display }}</td>
                         <td><small>{{ req.message|default:"—"|truncatechars:60 }}</small></td>
@@ -37,11 +35,14 @@
                         </td>
                         <td>
                             {% if req.status == 'pending' %}
-                            <form method="post" action="{% url 'request_update' req.pk %}" class="d-flex gap-1">
+                            <form method="post" action="{% url 'request_update' req.pk %}" class="d-flex gap-1"
+                                  onsubmit="return confirm('Decline this request? The patient is not notified automatically.')">
                                 {% csrf_token %}
-                                <button name="status" value="approved" class="btn btn-sm btn-success">Approve</button>
+                                <a href="{% url 'request_book' req.pk %}" class="btn btn-sm btn-success text-nowrap">Book &amp; Approve</a>
                                 <button name="status" value="declined" class="btn btn-sm btn-outline-danger">Decline</button>
                             </form>
+                            {% elif req.appointment %}
+                            <a href="{% url 'appointment_detail' req.appointment.pk %}" class="small text-nowrap">Booked {{ req.appointment.date|date:"M j" }}, {{ req.appointment.start_time|time:"g:i A" }}</a>
                             {% else %}—{% endif %}
                         </td>
                     </tr>

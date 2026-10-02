@@ -111,6 +111,7 @@ MIDDLEWARE = [
     'auditlog.middleware.AuditlogMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_ratelimit.middleware.RatelimitMiddleware',
 ]
 
 ROOT_URLCONF = 'dental_office.urls'
@@ -129,6 +130,8 @@ TEMPLATES = [
                 'dental_office.context_processors.user_roles',
                 'dental_office.context_processors.demo_mode',
             ],
+            # money and provider_name filters, available in every template.
+            'builtins': ['dental_office.templatetags.office'],
         },
     },
 ]
@@ -224,6 +227,10 @@ AUTHENTICATION_BACKENDS = [
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1  # hours
 AXES_LOCKOUT_PARAMETERS = [['ip_address', 'username']]
+# Behind Railway's proxy, REMOTE_ADDR is the proxy, not the visitor; without
+# this every attempt looked like a new address and nothing ever locked.
+AXES_CLIENT_IP_CALLABLE = 'dental_office.security.client_ip'
+AXES_LOCKOUT_CALLABLE = 'dental_office.security.lockout_response'
 
 # django-ratelimit flags the default LocMemCache as "not a shared cache",
 # which matters for multi-worker/multi-dyno deployments (each process would
@@ -238,6 +245,10 @@ SILENCED_SYSTEM_CHECKS = ['django_ratelimit.E003']
 # django-ratelimit's own documented way to disable limiting under `manage.py
 # test` without weakening it in production.
 RATELIMIT_ENABLE = 'test' not in sys.argv
+# Same proxy problem as AXES_CLIENT_IP_CALLABLE above; and a friendly
+# "please wait" page (HTTP 429) instead of a bare 403 when a limit is hit.
+RATELIMIT_IP_META_KEY = 'dental_office.security.client_ip'
+RATELIMIT_VIEW = 'dental_office.security.ratelimited'
 
 # Mobile app API (JWT-authenticated, separate from the session-based web app —
 # existing web views are untouched by this).
@@ -266,6 +277,12 @@ SIMPLE_JWT = {
 # ports entirely, so Resend is used via its HTTP API instead of SMTP.
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@dentaloffice.com')
+# The site's public address, for portal links in emails. The daily email job
+# has no web request to read it from. On Railway the web service has
+# RAILWAY_PUBLIC_DOMAIN and the cron service RAILWAY_SERVICE_WEB_URL; set
+# SITE_URL once the office has its own domain.
+_railway_host = config('RAILWAY_PUBLIC_DOMAIN', default='') or config('RAILWAY_SERVICE_WEB_URL', default='')
+SITE_URL = config('SITE_URL', default=f'https://{_railway_host}' if _railway_host else 'http://localhost:8000').rstrip('/')
 ANYMAIL = {
     'RESEND_API_KEY': config('RESEND_API_KEY', default=''),
 }

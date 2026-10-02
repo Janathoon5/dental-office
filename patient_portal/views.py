@@ -8,6 +8,7 @@ from appointments.models import Appointment, AppointmentRequest
 from billing.models import Invoice
 from clinical.models import TreatmentRecord, TreatmentPlan
 from imaging.forms import PatientImageUploadForm
+from messaging.models import Conversation, Message
 from .forms import AppointmentRequestForm, PatientProfileForm, InviteSetPasswordForm
 from .models import PatientInvite
 
@@ -172,6 +173,35 @@ def patient_images(request):
         'patient': patient,
         'images': images,
         'form': form,
+    })
+
+
+MAX_MESSAGE_LENGTH = 2000
+
+
+@patient_required
+def patient_messages(request):
+    """The patient's conversation with the office: the same thread staff see
+    on the patient's record and the mobile app shows."""
+    patient = request.user.patient_profile
+    conversation = Conversation.get_or_start_for(patient)
+
+    if request.method == 'POST':
+        body = request.POST.get('body', '').strip()
+        if not body:
+            messages.error(request, 'Type a message before sending.')
+        elif len(body) > MAX_MESSAGE_LENGTH:
+            messages.error(request, f'Messages can be up to {MAX_MESSAGE_LENGTH} characters.')
+        else:
+            Message.objects.create(conversation=conversation, sender=request.user, body=body)
+            messages.success(request, 'Message sent. The office will reply here.')
+            return redirect('patient_messages')
+
+    conversation.messages.filter(read_at__isnull=True).exclude(sender=request.user).update(read_at=timezone.now())
+    return render(request, 'patient_portal/messages.html', {
+        'patient': patient,
+        'thread': conversation.messages.select_related('sender').order_by('sent_at'),
+        'max_length': MAX_MESSAGE_LENGTH,
     })
 
 

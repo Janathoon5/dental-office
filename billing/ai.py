@@ -120,7 +120,12 @@ OUTPUT_SCHEMA = {
 
 
 class AnalysisError(Exception):
-    """A failure worth showing to staff as-is."""
+    """A failure worth showing to staff as-is. billed=True when the AI had
+    already done the work (and been paid for it) before things went wrong."""
+
+    def __init__(self, message, billed=False):
+        super().__init__(message)
+        self.billed = billed
 
 
 def _line(label, value):
@@ -296,9 +301,9 @@ def _ask_claude(system, content, schema, effort):
         response = stream.get_final_message()
 
     if response.stop_reason == 'refusal':
-        raise AnalysisError('The AI declined this request. Please handle this denial manually.')
+        raise AnalysisError('The AI declined this request. Please handle this denial manually.', billed=True)
     if response.stop_reason == 'max_tokens':
-        raise AnalysisError('The AI response was cut off. Please try again.')
+        raise AnalysisError('The AI response was cut off. Please try again.', billed=True)
 
     # If a fallback model took over, keep only the text produced after the last switch.
     text_parts = []
@@ -310,7 +315,7 @@ def _ask_claude(system, content, schema, effort):
     try:
         return json.loads(''.join(text_parts))
     except json.JSONDecodeError:
-        raise AnalysisError('The AI returned an unreadable response. Please try again.')
+        raise AnalysisError('The AI returned an unreadable response. Please try again.', billed=True)
 
 
 def _call_claude(denial):
@@ -391,15 +396,19 @@ TASKS = {
 }
 
 
-def run_ai_task(denial_id):
+def run_ai_task(denial_id, usage_id=None):
     """Run the denial's current AI task and store the result (or a readable
-    error) on it. A failed revision leaves the letter exactly as it was."""
+    error) on it. A failed revision leaves the letter exactly as it was.
+    When the AI never did the work (an unreadable file, the service down),
+    the attempt is taken back off the daily AI limit."""
     denial = ClaimDenial.objects.select_related('invoice__patient', 'invoice__appointment').get(pk=denial_id)
     call, apply = TASKS[denial.ai_task]
+    refund = True
     try:
         result = call(denial)
     except AnalysisError as e:
         denial.ai_status, denial.ai_error = 'failed', str(e)
+        refund = not e.billed
     except anthropic.AuthenticationError:
         denial.ai_status, denial.ai_error = 'failed', 'The Anthropic API key was rejected. Check ANTHROPIC_API_KEY.'
     except anthropic.RateLimitError:
@@ -420,17 +429,21 @@ def run_ai_task(denial_id):
     except Exception:
         logger.exception('Unexpected AI error for denial %s', denial_id)
         denial.ai_status, denial.ai_error = 'failed', 'Something went wrong while talking to the AI. Try again.'
+        refund = False  # unknown failure: it may have been billed
     else:
         denial.ai_status, denial.ai_error = 'done', ''
         apply(denial, result)
+        refund = False
     denial.save()
+    if refund and usage_id:
+        AIUsage.objects.filter(pk=usage_id).delete()
     return denial
 
 
-def _run_in_thread(denial_id):
+def _run_in_thread(denial_id, usage_id):
     close_old_connections()
     try:
-        run_ai_task(denial_id)
+        run_ai_task(denial_id, usage_id)
     finally:
         close_old_connections()
 
@@ -438,14 +451,16 @@ def _run_in_thread(denial_id):
 def start_ai_task(denial, task, user=None):
     """Kick off an AI task without blocking the request: a thorough read
     takes 30-90 seconds, longer than the web server's request timeout."""
-    AIUsage.objects.create(task=task, user=user)
+    # Counted up front, so many clicks at once can't get past the daily
+    # limit; run_ai_task gives it back if the AI never did the work.
+    usage = AIUsage.objects.create(task=task, user=user)
     denial.ai_task = task
     denial.ai_status, denial.ai_error, denial.ai_started_at = 'processing', '', timezone.now()
     denial.save(update_fields=['ai_task', 'ai_status', 'ai_error', 'ai_started_at'])
     if settings.ANALYZE_DENIALS_IN_BACKGROUND:
-        threading.Thread(target=_run_in_thread, args=(denial.pk,), daemon=True).start()
+        threading.Thread(target=_run_in_thread, args=(denial.pk, usage.pk), daemon=True).start()
     else:
-        run_ai_task(denial.pk)
+        run_ai_task(denial.pk, usage.pk)
 
 
 def start_analysis(denial, user=None):

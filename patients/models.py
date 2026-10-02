@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 from dental_office.mixins import SoftDeleteModel
+from .validators import validate_birth_date, validate_phone
 
 
 RECALL_INTERVAL_CHOICES = [
@@ -19,8 +20,8 @@ class Patient(SoftDeleteModel):
     )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    date_of_birth = models.DateField()
-    phone = models.CharField(max_length=20)
+    date_of_birth = models.DateField(validators=[validate_birth_date])
+    phone = models.CharField(max_length=20, validators=[validate_phone])
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
     insurance_provider = EncryptedCharField(max_length=100, blank=True)

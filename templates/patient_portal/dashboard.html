@@ -6,6 +6,13 @@
 {% block content %}
 <h5 class="mb-4">Welcome back, {{ patient.first_name }}</h5>
 
+{% if portal_unread_messages %}
+<div class="alert alert-info d-flex align-items-center justify-content-between gap-2 flex-wrap">
+    <span><i class="bi bi-chat-dots me-1"></i>You have {{ portal_unread_messages }} new message{{ portal_unread_messages|pluralize }} from the office.</span>
+    <a href="{% url 'patient_messages' %}" class="btn btn-sm btn-primary">Read</a>
+</div>
+{% endif %}
+
 <div class="row g-3 mb-4">
     <div class="col-md-6">
         <div class="card border-0 shadow-sm h-100">
@@ -18,7 +25,7 @@
                     <p class="mb-1 fs-5">{{ next_appointment.date|date:"F j, Y" }} at {{ next_appointment.start_time|time:"g:i A" }}</p>
                     <p class="text-muted mb-2">{{ next_appointment.get_appointment_type_display }}</p>
                     {% if next_appointment.dentist %}
-                        <p class="text-muted small mb-0">with Dr. {{ next_appointment.dentist.get_full_name|default:next_appointment.dentist.username }}</p>
+                        <p class="text-muted small mb-0">with {{ next_appointment.dentist|provider_name }}</p>
                     {% endif %}
                 {% else %}
                     <p class="text-muted mb-2">No upcoming appointments.</p>
@@ -38,7 +45,7 @@
                     <span class="fw-semibold">Balance Due</span>
                 </div>
                 {% if total_balance > 0 %}
-                    <p class="fs-4 fw-bold text-danger mb-1">${{ total_balance|floatformat:2 }}</p>
+                    <p class="fs-4 fw-bold text-danger mb-1">{{ total_balance|money }}</p>
                     <a href="{% url 'patient_invoices' %}" class="btn btn-sm btn-outline-danger">View Invoices</a>
                 {% else %}
                     <p class="fs-5 text-success mb-0"><i class="bi bi-check-circle me-1"></i> No balance due</p>

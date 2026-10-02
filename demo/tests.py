@@ -1,6 +1,7 @@
 import io
 import shutil
 import tempfile
+from unittest import mock
 
 from django.contrib.auth.models import Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -175,7 +176,10 @@ class AIDailyLimitTests(MediaMixin, TestCase):
         owner = User.objects.create_superuser('owner', 'o@example.com', 'pw')
         TOTPDevice.objects.create(user=owner, secret='JBSWY3DPEHPK3PXP', confirmed=True)
         self.client.force_login(owner)
-        self._upload()
+        # A run that works is counted (a failed one is given back).
+        working_ai = {'analyze': (lambda denial: {}, lambda denial, result: None)}
+        with mock.patch.dict('billing.ai.TASKS', working_ai):
+            self._upload()
         self.assertEqual(ClaimDenial.objects.count(), 1)
         self.assertEqual(AIUsage.objects.count(), 3)
 
@@ -186,3 +190,16 @@ class AIDailyLimitTests(MediaMixin, TestCase):
         self.client.force_login(self.staff)
         self._upload()
         self.assertEqual(ClaimDenial.objects.count(), 1)
+
+
+class DemoPatientHistoryTests(MediaMixin, TestCase):
+    """From the live-site test: Reports said "New Patients This Month: 21"
+    because every demo patient was created on the day of the reset."""
+
+    @override_settings(DEMO_MODE=True)
+    def test_only_one_demo_patient_is_new_this_month(self):
+        from django.utils import timezone
+        call_command('reset_demo', stdout=io.StringIO())
+        today = timezone.localdate()
+        new = Patient.objects.filter(created_at__year=today.year, created_at__month=today.month)
+        self.assertEqual([p.first_name for p in new], ['Tom'])

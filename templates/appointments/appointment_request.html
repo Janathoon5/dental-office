@@ -50,7 +50,7 @@
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Preferred Date *</label>
                         <input type="date" name="preferred_date"
-                               value="{{ form.preferred_date.value|date:'Y-m-d'|default:'' }}"
+                               value="{% if form.is_bound %}{{ form.preferred_date.value|default:'' }}{% else %}{{ form.preferred_date.value|date:'Y-m-d'|default:'' }}{% endif %}"
                                min="{{ today|date:'Y-m-d' }}"
                                class="form-control {% if form.preferred_date.errors %}is-invalid{% endif %}" required>
                         {% for e in form.preferred_date.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
@@ -59,6 +59,10 @@
                         <label class="form-label fw-semibold">Preferred Time *</label>
                         <input type="time" name="preferred_time" value="{{ form.preferred_time.value|default:'' }}"
                                class="form-control {% if form.preferred_time.errors %}is-invalid{% endif %}" required>
+                        {% for e in form.preferred_time.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-12 form-text mt-1">
+                        Office hours: Mon – Fri 8:00 AM – 5:00 PM &bull; Saturday 8:00 AM – 1:00 PM &bull; Sunday closed
                     </div>
                     <div class="col-12">
                         <label class="form-label fw-semibold">Appointment Type</label>

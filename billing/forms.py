@@ -1,6 +1,8 @@
 from django import forms
 from pathlib import Path
 
+from clinical.validators import validate_tooth_list
+from dental_office.templatetags.office import money
 from .models import ClaimDenial, Invoice, InvoiceLineItem, Payment
 
 
@@ -31,6 +33,11 @@ class InvoiceLineItemForm(forms.ModelForm):
     def clean_cdt_code(self):
         return self.cleaned_data['cdt_code'].strip().upper()
 
+    def clean_tooth_number(self):
+        tooth = self.cleaned_data['tooth_number'].strip()
+        validate_tooth_list(tooth)
+        return tooth
+
     def clean_surfaces(self):
         surfaces = self.cleaned_data['surfaces'].replace(' ', '').replace(',', '').upper()
         if surfaces and not set(surfaces) <= set('MODBLFI'):
@@ -39,9 +46,33 @@ class InvoiceLineItemForm(forms.ModelForm):
 
 
 class PaymentForm(forms.ModelForm):
+    # Shown once the amount turns out to be more than the balance due.
+    allow_credit = forms.BooleanField(required=False)
+
     class Meta:
         model = Payment
         fields = ['amount', 'method', 'notes']
+        widgets = {
+            'amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0.01', 'inputmode': 'decimal'}),
+        }
+
+    def __init__(self, *args, invoice=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.invoice = invoice
+        self.overpayment = None
+
+    def clean(self):
+        cleaned_data = super().clean()
+        amount = cleaned_data.get('amount')
+        if amount and self.invoice is not None:
+            balance = max(self.invoice.balance_due(), 0)
+            if amount > balance and not cleaned_data.get('allow_credit'):
+                self.overpayment = amount - balance
+                raise forms.ValidationError(
+                    f'{money(amount)} is {money(self.overpayment)} more than the {money(balance)} balance due. '
+                    f'Check the amount, or tick "Keep the extra as a credit" if the patient is paying ahead.'
+                )
+        return cleaned_data
 
 
 MAX_LETTER_BYTES = 20 * 1024 * 1024

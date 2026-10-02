@@ -86,3 +86,54 @@ class AcceptInviteTests(TestCase):
 
         dashboard = self.client.get(reverse('patient_dashboard'))
         self.assertEqual(dashboard.status_code, 200)
+
+
+class PortalMessagesTests(TestCase):
+    """From the live-site test: the office's replies only reached patients
+    who used the mobile app; the website had no messages page."""
+
+    def setUp(self):
+        from messaging.models import Conversation, Message
+        from staff.models import StaffProfile
+        self.user = User.objects.create_user(username='msgpatient', password='pw')
+        self.user.groups.add(Group.objects.get_or_create(name='Patient')[0])
+        self.patient = Patient.objects.create(first_name='Maria', last_name='Lopez', phone='555-0000',
+                                              date_of_birth=datetime.date(1985, 3, 2), user=self.user)
+        self.desk = User.objects.create_user(username='msgdesk', password='pw', first_name='Sofia', last_name='Alvarez')
+        StaffProfile.objects.create(user=self.desk, role='receptionist')
+        self.conversation = Conversation.get_or_start_for(self.patient)
+        self.staff_message = Message.objects.create(conversation=self.conversation, sender=self.desk,
+                                                    body="We're appealing it with your X-ray.")
+        self.client.force_login(self.user)
+
+    def test_patient_sees_unread_office_messages(self):
+        dashboard = self.client.get(reverse('patient_dashboard'))
+        self.assertContains(dashboard, 'You have 1 new message from the office')
+        page = self.client.get(reverse('patient_messages'))
+        self.assertContains(page, "We&#x27;re appealing it with your X-ray.")
+        self.assertContains(page, 'Sofia Alvarez')
+        self.staff_message.refresh_from_db()
+        self.assertIsNotNone(self.staff_message.read_at)
+        self.assertNotContains(self.client.get(reverse('patient_dashboard')), 'new message')
+
+    def test_patient_can_reply(self):
+        response = self.client.post(reverse('patient_messages'), {'body': 'Thank you!'}, follow=True)
+        self.assertContains(response, 'Message sent')
+        reply = self.conversation.messages.order_by('-sent_at').first()
+        self.assertEqual((reply.body, reply.sender), ('Thank you!', self.user))
+
+    def test_empty_message_is_not_sent(self):
+        self.client.post(reverse('patient_messages'), {'body': '   '})
+        self.assertEqual(self.conversation.messages.count(), 1)
+
+    def test_hygienist_is_not_called_doctor(self):
+        from appointments.models import Appointment
+        from django.utils import timezone
+        from staff.models import StaffProfile
+        hygienist = User.objects.create_user(username='msghyg', password='pw', first_name='Marcus', last_name='Reed')
+        StaffProfile.objects.create(user=hygienist, role='hygienist')
+        Appointment.objects.create(patient=self.patient, dentist=hygienist, start_time=datetime.time(9, 0),
+                                   date=timezone.localdate() + datetime.timedelta(days=2))
+        page = self.client.get(reverse('patient_dashboard'))
+        self.assertContains(page, 'with Marcus Reed')
+        self.assertNotContains(page, 'Dr. Marcus')

@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from patients.models import Patient
+from patients.validators import validate_phone
 
 
 class Appointment(models.Model):
@@ -61,7 +62,7 @@ class AppointmentRequest(models.Model):
     )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    phone = models.CharField(max_length=20)
+    phone = models.CharField(max_length=20, validators=[validate_phone])
     email = models.EmailField(blank=True)
     preferred_date = models.DateField()
     preferred_time = models.TimeField()
@@ -69,6 +70,9 @@ class AppointmentRequest(models.Model):
     message = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     submitted_at = models.DateTimeField(auto_now_add=True)
+    # The visit booked when staff approved the request.
+    appointment = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='requests')
 
     class Meta:
         ordering = ['-submitted_at']

@@ -1,8 +1,7 @@
 from django.core.management.base import BaseCommand
-from django.core.mail import send_mail
 from django.utils import timezone
-from django.conf import settings
 import datetime
+from appointments.emails import contact_line, office_name, send_patient_email
 from appointments.models import RecallNotice
 from appointments.recalls import recall_lists
 
@@ -38,23 +37,25 @@ class Command(BaseCommand):
                 continue
 
             if due <= today:
-                subject = "It's time for your dental cleaning"
+                subject = f"It's time for your cleaning at {office_name()}"
                 opener = "Our records show you're due for your regular cleaning and checkup."
             else:
-                subject = "Your next dental cleaning is coming up"
+                subject = f"Your next cleaning at {office_name()} is coming up"
                 opener = (f"You're due for your next cleaning and checkup around "
-                          f"{due.strftime('%B %d, %Y')}.")
+                          f"{due:%B} {due.day}, {due.year}.")
+            how_to_book = contact_line()
+            if patient.user_id:
+                how_to_book += ', or request a time in the patient portal'
             message = (
                 f"Hi {patient.first_name},\n\n"
                 f"{opener}\n\n"
                 f"Regular cleanings help catch small problems before they become big ones. "
-                f"Please call us or request an appointment through the patient portal "
-                f"to book a time that works for you.\n\n"
+                f"To book a time that works for you, {how_to_book}.\n\n"
                 f"Thank you!"
             )
 
             try:
-                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [patient.email])
+                send_patient_email(subject, message, patient.email, patient=patient)
                 RecallNotice.objects.create(
                     patient=patient, due_date=due, status='sent', recipient_email=patient.email,
                 )

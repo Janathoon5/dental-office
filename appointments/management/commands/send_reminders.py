@@ -1,9 +1,9 @@
 from django.core.management.base import BaseCommand
-from django.core.mail import send_mail
 from django.utils import timezone
-from django.conf import settings
 import datetime
+from appointments.emails import contact_line, long_date, office_name, send_patient_email, short_time
 from appointments.models import Appointment, ReminderLog
+from dental_office.providers import provider_name
 
 
 class Command(BaseCommand):
@@ -48,19 +48,20 @@ class Command(BaseCommand):
                 self.stdout.write(f"  No email on file: {appt.patient}")
                 continue
 
-            subject = f"Appointment Reminder — {appt.date.strftime('%A, %B %d')}"
+            when = f"{appt.date:%A}, {appt.date:%B} {appt.date.day} at {short_time(appt.start_time)}"
+            subject = f"Appointment reminder: {when}"
             message = (
                 f"Hi {appt.patient.first_name},\n\n"
-                f"This is a reminder for your upcoming appointment:\n\n"
-                f"  Date:  {appt.date.strftime('%A, %B %d, %Y')}\n"
-                f"  Time:  {appt.start_time.strftime('%I:%M %p').lstrip('0')}\n"
+                f"This is a reminder of your upcoming appointment at {office_name()}:\n\n"
+                f"  Date:      {long_date(appt.date)}\n"
+                f"  Time:      {short_time(appt.start_time)}\n"
             )
             if appt.dentist:
-                message += f"  Provider: {appt.dentist.get_full_name()}\n"
-            message += "\nIf you need to reschedule, please call us as soon as possible.\n\nThank you!"
+                message += f"  Provider:  {provider_name(appt.dentist)}\n"
+            message += f"\nIf you need to reschedule, {contact_line()}.\n\nSee you soon!"
 
             try:
-                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [appt.patient.email])
+                send_patient_email(subject, message, appt.patient.email, patient=appt.patient)
                 ReminderLog.objects.create(
                     appointment=appt,
                     status='sent',

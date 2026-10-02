@@ -69,6 +69,15 @@ def _require_2fa(user):
     return None
 
 
+def _not_allowed(request, reason):
+    """Send someone back from a page their role can't use, saying why
+    instead of silently landing them on the dashboard."""
+    if is_patient(request.user) and not is_staff_member(request.user):
+        return redirect('patient_dashboard')
+    messages.warning(request, reason)
+    return redirect('dashboard')
+
+
 def patient_required(view_func):
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
@@ -112,7 +121,7 @@ def clinical_required(view_func):
         if not request.user.is_authenticated:
             return redirect('login')
         if not (request.user.is_superuser or is_clinical_staff(request.user)):
-            return redirect('dashboard')
+            return _not_allowed(request, 'Only dentists and hygienists can open that page.')
         needs_2fa = _require_2fa(request.user)
         if needs_2fa:
             return needs_2fa
@@ -126,7 +135,7 @@ def dentist_required(view_func):
         if not request.user.is_authenticated:
             return redirect('login')
         if not (request.user.is_superuser or is_dentist(request.user)):
-            return redirect('dashboard')
+            return _not_allowed(request, 'Only dentists can open that page.')
         needs_2fa = _require_2fa(request.user)
         if needs_2fa:
             return needs_2fa

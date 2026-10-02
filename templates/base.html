@@ -143,6 +143,8 @@
             <span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;">Admin</span>
             {% elif user_is_dentist %}
             <span class="badge bg-info text-dark ms-1" style="font-size:0.65rem;">Dentist</span>
+            {% elif user_is_hygienist %}
+            <span class="badge bg-success ms-1" style="font-size:0.65rem;">Hygienist</span>
             {% elif user_is_receptionist %}
             <span class="badge bg-secondary ms-1" style="font-size:0.65rem;">Receptionist</span>
             {% endif %}

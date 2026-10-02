@@ -5,14 +5,23 @@ from django.contrib.auth.models import User
 CLINICAL_ROLES = ('dentist', 'hygienist')
 
 
-def provider_label(user):
+def _role(user):
+    return getattr(getattr(user, 'staff_profile', None), 'role', '')
+
+
+def provider_name(user):
+    """"Dr. Elena Park" for a dentist, "Marcus Reed" for anyone else."""
     name = user.get_full_name() or user.username
-    role = getattr(getattr(user, 'staff_profile', None), 'role', '')
+    return f'Dr. {name}' if _role(user) == 'dentist' else name
+
+
+def provider_label(user):
+    role = _role(user)
     if role == 'dentist':
-        return f'Dr. {name} (Dentist)'
+        return f'{provider_name(user)} (Dentist)'
     if role == 'hygienist':
-        return f'{name} (Hygienist)'
-    return name
+        return f'{provider_name(user)} (Hygienist)'
+    return provider_name(user)
 
 
 class ProviderChoiceField(forms.ModelChoiceField):

@@ -20,6 +20,7 @@
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Tooth Number</label>
                     {{ form.tooth_number }}
+                    {% for e in form.tooth_number.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
                 <div class="col-12">
                     <label class="form-label fw-semibold">Procedure *</label>
@@ -29,19 +30,22 @@
                 <div class="col-12">
                     <label class="form-label fw-semibold">Dentist / Provider</label>
                     {{ form.dentist }}
+                    {% for e in form.dentist.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
                 <div class="col-12">
                     <label class="form-label fw-semibold">Linked Appointment</label>
                     {{ form.appointment }}
+                    {% for e in form.appointment.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
                 <div class="col-12">
                     <label class="form-label fw-semibold">Clinical Notes</label>
                     {{ form.notes }}
+                    {% for e in form.notes.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
             </div>
             <div class="mt-4 d-flex gap-2">
                 <button type="submit" class="btn btn-primary">Save Record</button>
-                <a href="{% url 'patient_detail' patient.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                <a href="{% if record %}{% url 'record_detail' record.pk %}{% else %}{% url 'patient_detail' patient.pk %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
             </div>
         </form>
     </div>

@@ -99,3 +99,52 @@ class SendPatientInviteTests(TestCase):
 
         self.assertFalse(first_invite.is_valid())
         self.assertTrue(second_invite.is_valid())
+
+
+class PatientFormCheckTests(TestCase):
+    """From the live-site test: a future birth date, a phone number like
+    "call me maybe" and an exact duplicate patient were all accepted."""
+
+    def setUp(self):
+        staff = User.objects.create_user(username='deskchecks', password='pw')
+        StaffProfile.objects.create(user=staff, role='receptionist')
+        TOTPDevice.objects.create(user=staff, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        self.client.force_login(staff)
+
+    def _add(self, **overrides):
+        data = {'first_name': 'Maria', 'last_name': 'Lopez', 'date_of_birth': '1985-03-02',
+                'phone': '(555) 123-4567', 'email': '', 'address': '', 'insurance_provider': '',
+                'insurance_id': '', 'allergies': '', 'medical_notes': '', 'recall_interval_months': 6}
+        data.update(overrides)
+        return self.client.post(reverse('patient_add'), data)
+
+    def test_future_birth_date_is_refused(self):
+        response = self._add(date_of_birth='2099-01-01')
+        self.assertContains(response, "can&#x27;t be in the future")
+        self.assertContains(response, 'value="2099-01-01"')  # what was typed stays in the box
+        self.assertFalse(Patient.objects.exists())
+
+    def test_phone_must_look_like_a_phone_number(self):
+        response = self._add(phone='call me maybe')
+        self.assertContains(response, 'Enter a phone number')
+        for ok in ('(555) 123-4567', '555.123.4567', '+1 555 123 4567', '555-123-4567 x22'):
+            Patient.objects.all().delete()
+            self.assertEqual(self._add(phone=ok).status_code, 302, ok)
+
+    def test_duplicate_patient_warns_then_saves_when_confirmed(self):
+        existing = Patient.objects.create(first_name='Maria', last_name='Lopez', phone='555-0000',
+                                          date_of_birth=datetime.date(1985, 3, 2))
+        response = self._add(first_name='maria', last_name='LOPEZ')
+        self.assertContains(response, 'is already a patient')
+        self.assertContains(response, reverse('patient_detail', args=[existing.pk]))
+        self.assertEqual(Patient.objects.count(), 1)
+        self.assertEqual(self._add(confirm_duplicate='on').status_code, 302)
+        self.assertEqual(Patient.objects.count(), 2)
+
+    def test_editing_a_patient_is_not_flagged_as_their_own_duplicate(self):
+        patient = Patient.objects.create(first_name='Maria', last_name='Lopez', phone='555-0000',
+                                         date_of_birth=datetime.date(1985, 3, 2))
+        response = self.client.post(reverse('patient_edit', args=[patient.pk]), {
+            'first_name': 'Maria', 'last_name': 'Lopez', 'date_of_birth': '1985-03-02', 'phone': '555-0001',
+            'recall_interval_months': 6})
+        self.assertEqual(response.status_code, 302)

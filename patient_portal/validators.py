@@ -1,4 +1,4 @@
-from datetime import time
+from datetime import datetime, time, timedelta
 
 from django.core.exceptions import ValidationError
 
@@ -40,3 +40,19 @@ def validate_office_hours(preferred_date, preferred_time):
             'preferred_time': f'On {day_name}s, office hours are {_fmt(open_t)} – {_fmt(close_t)}. '
                               f'Please pick a time within those hours.',
         })
+
+
+def office_hours_problem(date, start_time, minutes):
+    """Why a visit falls outside office hours, or None if it fits. Staff can
+    still book it (an emergency, a dentist staying late) after confirming."""
+    day_name = _DAY_NAMES[date.weekday()]
+    hours = OFFICE_HOURS.get(date.weekday())
+    if hours is None:
+        return f'The office is closed on {day_name}s.'
+    open_t, close_t = hours
+    start = datetime.combine(date, start_time)
+    end = start + timedelta(minutes=minutes)
+    if start_time < open_t or end > datetime.combine(date, close_t):
+        return (f'On {day_name}s the office is open {_fmt(open_t)} – {_fmt(close_t)}, '
+                f'and this visit runs {_fmt(start.time())} – {_fmt(end.time())}.')
+    return None

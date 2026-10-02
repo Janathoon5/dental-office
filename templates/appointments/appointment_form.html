@@ -12,6 +12,12 @@
                 {% for e in form.non_field_errors %}<div><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ e }}</div>{% endfor %}
             </div>
             {% endif %}
+            {% if form.outside_hours or form.outside_hours_ok.value %}
+            <div class="form-check border rounded bg-light p-3 ps-5 mb-3">
+                <input class="form-check-input" type="checkbox" name="outside_hours_ok" id="outsideHoursOk" {% if form.outside_hours_ok.value %}checked{% endif %}>
+                <label class="form-check-label fw-semibold" for="outsideHoursOk">Book anyway, outside office hours</label>
+            </div>
+            {% endif %}
             <div class="row g-3">
                 <div class="col-12">
                     <label class="form-label fw-semibold">Patient *</label>

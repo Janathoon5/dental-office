@@ -95,6 +95,10 @@
         <a href="{% url 'patient_invoices' %}" class="nav-link {% if request.resolver_match.url_name == 'patient_invoices' %}active{% endif %}">
             <i class="bi bi-receipt"></i> My Invoices
         </a>
+        <a href="{% url 'patient_messages' %}" class="nav-link {% if request.resolver_match.url_name == 'patient_messages' %}active{% endif %}">
+            <i class="bi bi-chat-dots"></i> Messages
+            {% if portal_unread_messages %}<span class="badge bg-warning text-dark ms-1" style="font-size:0.7rem;">{{ portal_unread_messages }}<span class="visually-hidden"> unread</span></span>{% endif %}
+        </a>
         <a href="{% url 'patient_profile' %}" class="nav-link {% if request.resolver_match.url_name == 'patient_profile' %}active{% endif %}">
             <i class="bi bi-person"></i> My Profile
         </a>

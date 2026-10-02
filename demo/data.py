@@ -198,6 +198,17 @@ def build():
     maria.user = users['patient']
     maria.save(update_fields=['user'])
 
+    # Patients joined over the years, before their first cleaning on record,
+    # so Reports doesn't count everyone as a new patient this month. Tom has
+    # no history yet: he's this month's new patient.
+    now, joined_rng = timezone.now(), random.Random(7)  # own generator, so the rest of the demo is unchanged
+    for first, patient in patients.items():
+        if LAST_CLEANING[first] is None:
+            joined = now - datetime.timedelta(days=min(3, timezone.localdate().day - 1))
+        else:
+            joined = now - datetime.timedelta(days=LAST_CLEANING[first] + 182 + joined_rng.randint(20, 1500))
+        Patient.all_objects.filter(pk=patient.pk).update(created_at=joined)
+
     for name, alerts in ALERTS.items():
         for alert_type, severity, description in alerts:
             MedicalAlert.objects.create(patient=patients[name], alert_type=alert_type, severity=severity,

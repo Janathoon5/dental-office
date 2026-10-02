@@ -18,6 +18,7 @@ from reportlab.platypus import (
 
 from clinical.teeth import parse_teeth
 from imaging.models import DentalImage
+from dental_office.templatetags.office import money
 
 NAVY = colors.HexColor('#1a3a5c')
 STYLES = {
@@ -123,7 +124,7 @@ def _summary_section(denial):
         ['Insurer on denial', denial.insurer_name or '—'],
         ['Claim number', denial.claim_number or '—'],
         ['Denial codes', denial.denial_codes or '—'],
-        ['Amount denied', f'${denial.amount_denied}' if denial.amount_denied is not None else '—'],
+        ['Amount denied', money(denial.amount_denied) if denial.amount_denied is not None else '—'],
     ], [1.8 * inch, 4.9 * inch], header=False)]
 
     lines = list(invoice.line_items.all())
@@ -131,10 +132,10 @@ def _summary_section(denial):
     if lines:
         rows = [['Date', 'Code', 'Tooth', 'Surf.', 'Description', 'Fee']]
         rows += [[l.service_date.strftime('%m/%d/%Y'), l.cdt_code, l.tooth_number or '—', l.surfaces or '—',
-                  l.description, f'${l.fee}'] for l in lines]
+                  l.description, money(l.fee)] for l in lines]
         story.append(_table(rows, [0.9 * inch, 0.65 * inch, 0.55 * inch, 0.55 * inch, 3.15 * inch, 0.9 * inch]))
     else:
-        story.append(_p(f'Total billed: ${invoice.subtotal}', 'small'))
+        story.append(_p(f'Total billed: {money(invoice.subtotal)}', 'small'))
     return story
 
 

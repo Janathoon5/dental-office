@@ -44,6 +44,23 @@ class Invoice(SoftDeleteModel):
     def balance_due(self):
         return self.patient_owes() - self.amount_paid()
 
+    def credit(self):
+        """Amount paid beyond what the patient owes, kept as a credit."""
+        return max(-self.balance_due(), Decimal('0'))
+
+    def update_status(self):
+        """Paid, partly paid or pending, from the payments that still count."""
+        if self.balance_due() <= 0:
+            self.status = 'paid'
+        elif self.amount_paid() > 0:
+            self.status = 'partial'
+        else:
+            self.status = 'pending'
+        self.save(update_fields=['status'])
+
+    def voided_payments(self):
+        return Payment.all_objects.filter(invoice=self, is_active=False).select_related('deleted_by')
+
     def recalculate_subtotal(self):
         """Once an invoice has procedure lines, its subtotal is their total."""
         lines = list(self.line_items.all())
@@ -86,6 +103,9 @@ class Payment(SoftDeleteModel):
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     method = models.CharField(max_length=20, choices=METHOD_CHOICES, default='card')
     notes = models.CharField(max_length=200, blank=True)
+    # A voided payment is soft-deleted (deleted_by/deleted_at say who and
+    # when) and stops counting toward the invoice; this says why.
+    void_reason = models.CharField(max_length=200, blank=True)
 
     class Meta(SoftDeleteModel.Meta):
         pass

@@ -69,7 +69,7 @@
                     <dt class="col-5 text-muted">Insurer</dt><dd class="col-7">{{ denial.insurer_name|default:"—" }}</dd>
                     <dt class="col-5 text-muted">Claim #</dt><dd class="col-7">{{ denial.claim_number|default:"—" }}</dd>
                     <dt class="col-5 text-muted">Denial codes</dt><dd class="col-7">{{ denial.denial_codes|default:"—" }}</dd>
-                    <dt class="col-5 text-muted">Amount denied</dt><dd class="col-7">{% if denial.amount_denied is not None %}${{ denial.amount_denied }}{% else %}—{% endif %}</dd>
+                    <dt class="col-5 text-muted">Amount denied</dt><dd class="col-7">{% if denial.amount_denied is not None %}{{ denial.amount_denied|money }}{% else %}—{% endif %}</dd>
                     <dt class="col-5 text-muted">Insurer's reason</dt><dd class="col-7">{{ denial.denial_reason|default:"—" }}</dd>
                 </dl>
             </div>

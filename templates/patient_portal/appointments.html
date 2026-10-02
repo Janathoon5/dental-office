@@ -58,7 +58,7 @@
                 <div>
                     <span class="fw-semibold">{{ appt.get_appointment_type_display }}</span>
                     {% if appt.dentist %}
-                    <span class="text-muted ms-2 small">with Dr. {{ appt.dentist.get_full_name|default:appt.dentist.username }}</span>
+                    <span class="text-muted ms-2 small">with {{ appt.dentist|provider_name }}</span>
                     {% endif %}
                     <div class="text-muted small">{{ appt.date|date:"l, F j, Y" }} at {{ appt.start_time|time:"g:i A" }} &bull; {{ appt.duration_minutes }} min</div>
                 </div>

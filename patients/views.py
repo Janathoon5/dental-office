@@ -1,12 +1,12 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.urls import reverse
-from django.core.mail import send_mail
 from django.db.models import Q
 from auditlog.signals import accessed
 from dental_office.roles import staff_required
 from .models import Patient, MedicalAlert
 from .forms import PatientForm, MedicalAlertForm
+from appointments.emails import office_name, send_patient_email
 from appointments.recalls import recall_for_patient
 from clinical.teeth import build_chart
 
@@ -91,18 +91,15 @@ def send_patient_invite(request, pk):
         reverse('accept_invite', args=[str(invite.token)])
     )
 
-    send_mail(
-        subject='Your Patient Portal Invitation',
-        message=(
-            f'Hello {patient.first_name},\n\n'
-            f'You have been invited to access your patient portal. '
-            f'Use it to view your appointments, treatment records, and invoices online.\n\n'
-            f'Your username is: {patient.user.username}\n\n'
-            f'Set your password here:\n{invite_url}\n\n'
-            f'This link expires in 7 days. If you did not expect this email, you can ignore it.\n'
-        ),
-        from_email=None,
-        recipient_list=[patient.email],
+    send_patient_email(
+        f'Your patient portal invitation from {office_name()}',
+        f'Hello {patient.first_name},\n\n'
+        f'{office_name()} has invited you to its patient portal. '
+        f'Use it to view your appointments, treatment records, and invoices online.\n\n'
+        f'Your username is: {patient.user.username}\n\n'
+        f'Set your password here:\n{invite_url}\n\n'
+        f'This link expires in 7 days. If you did not expect this email, you can ignore it.',
+        patient.email,
     )
 
     messages.success(request, f'Portal invitation sent to {patient.email}.')

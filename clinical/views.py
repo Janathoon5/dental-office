@@ -44,13 +44,21 @@ def record_add(request, patient_pk):
 
 
 @clinical_required
+def record_detail(request, pk):
+    record = get_object_or_404(TreatmentRecord.objects.select_related('patient', 'dentist', 'appointment'), pk=pk)
+    accessed.send(sender=TreatmentRecord, instance=record)
+    return render(request, 'clinical/record_detail.html', {'record': record, 'patient': record.patient})
+
+
+@clinical_required
 def record_edit(request, pk):
     record = get_object_or_404(TreatmentRecord, pk=pk)
     if request.method == 'POST':
         form = TreatmentRecordForm(request.POST, instance=record)
         if form.is_valid():
             form.save()
-            return redirect('patient_detail', pk=record.patient.pk)
+            messages.success(request, 'Treatment record saved.')
+            return redirect('record_detail', pk=record.pk)
     else:
         form = TreatmentRecordForm(instance=record)
     return render(request, 'clinical/record_form.html', {

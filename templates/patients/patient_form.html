@@ -7,6 +7,18 @@
     <div class="card-body">
         <form method="post" novalidate>
             {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div class="alert alert-warning" role="alert">
+                {% for e in form.non_field_errors %}<div><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ e }}</div>{% endfor %}
+                {% if form.duplicate %}
+                <div class="mt-2"><a href="{% url 'patient_detail' form.duplicate.pk %}" target="_blank" rel="noopener">Open {{ form.duplicate.full_name }}'s record</a> to check.</div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" name="confirm_duplicate" id="confirmDuplicate">
+                    <label class="form-check-label" for="confirmDuplicate">This is a different person. Save anyway.</label>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
 
             <div class="row g-3">
                 <div class="col-md-6">
@@ -23,13 +35,13 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Date of Birth *</label>
-                    <input type="date" name="date_of_birth" value="{{ form.date_of_birth.value|date:'Y-m-d'|default:'' }}"
-                           class="form-control {% if form.date_of_birth.errors %}is-invalid{% endif %}" required>
+                    <input type="date" name="date_of_birth" value="{% if form.is_bound %}{{ form.date_of_birth.value|default:'' }}{% else %}{{ form.date_of_birth.value|date:'Y-m-d'|default:'' }}{% endif %}"
+                           max="{% now 'Y-m-d' %}" class="form-control {% if form.date_of_birth.errors %}is-invalid{% endif %}" required>
                     {% for e in form.date_of_birth.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Phone *</label>
-                    <input type="text" name="phone" value="{{ form.phone.value|default:'' }}"
+                    <input type="tel" name="phone" value="{{ form.phone.value|default:'' }}" placeholder="(555) 123-4567"
                            class="form-control {% if form.phone.errors %}is-invalid{% endif %}" required>
                     {% for e in form.phone.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
                 </div>

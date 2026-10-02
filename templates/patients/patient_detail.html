@@ -261,7 +261,7 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span class="fw-semibold"><i class="bi bi-clipboard2-pulse me-2"></i>Treatment Records</span>
-                {% if user_is_dentist %}
+                {% if user_is_clinical %}
                 <a href="{% url 'record_add' patient.pk %}" class="btn btn-sm btn-primary">
                     <i class="bi bi-plus-lg"></i> Add Record
                 </a>
@@ -270,18 +270,21 @@
             <div class="card-body p-0">
                 {% if patient.treatment_records.all %}
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover mb-0 align-middle">
                             <thead class="table-light">
-                                <tr><th>Date</th><th>Procedure</th><th>Tooth</th><th>Dentist</th><th></th></tr>
+                                <tr><th>Date</th><th>Procedure</th><th>Tooth</th><th class="d-none d-sm-table-cell">Provider</th><th><span class="visually-hidden">Actions</span></th></tr>
                             </thead>
                             <tbody>
                                 {% for rec in patient.treatment_records.all %}
                                 <tr>
-                                    <td>{{ rec.date|date:"M j, Y" }}</td>
-                                    <td>{{ rec.procedure }}</td>
+                                    <td class="text-nowrap">{{ rec.date|date:"M j, Y" }}</td>
+                                    <td>
+                                        {{ rec.procedure }}
+                                        {% if user_is_clinical and rec.notes %}<div class="small text-muted">{{ rec.notes|truncatechars:90 }}</div>{% endif %}
+                                    </td>
                                     <td>{{ rec.tooth_number|default:"—" }}</td>
-                                    <td>{{ rec.dentist.get_full_name|default:"—" }}</td>
-                                    <td>{% if user_is_dentist %}<a href="{% url 'record_edit' rec.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>{% endif %}</td>
+                                    <td class="d-none d-sm-table-cell">{{ rec.dentist.get_full_name|default:"—" }}</td>
+                                    <td>{% if user_is_clinical %}<a href="{% url 'record_detail' rec.pk %}" class="btn btn-sm btn-outline-secondary">View</a>{% endif %}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -341,9 +344,9 @@
                                 {% for inv in patient.invoices.all %}
                                 <tr>
                                     <td>{{ inv.date_issued|date:"M j, Y" }}</td>
-                                    <td>${{ inv.subtotal }}</td>
-                                    <td>${{ inv.insurance_amount }}</td>
-                                    <td>${{ inv.patient_owes }}</td>
+                                    <td>{{ inv.subtotal|money }}</td>
+                                    <td>{{ inv.insurance_amount|money }}</td>
+                                    <td>{{ inv.patient_owes|money }}</td>
                                     <td>
                                         <span class="badge {% if inv.status == 'paid' %}bg-success{% elif inv.status == 'partial' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
                                             {{ inv.get_status_display }}

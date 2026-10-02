@@ -14,7 +14,7 @@ from django.urls import reverse
 from clinical.models import ToothCondition, TreatmentRecord
 from patients.models import MedicalAlert, Patient
 from staff.models import StaffProfile, TOTPDevice
-from .models import ClaimDenial, Invoice, InvoiceLineItem, OfficeSettings
+from .models import AIUsage, ClaimDenial, Invoice, InvoiceLineItem, OfficeSettings, Payment
 
 
 class BillingAccessControlTests(TestCase):
@@ -663,3 +663,109 @@ class FriendlyAIErrorTests(TestCase):
         denial = self._fail_with("Error code: 400 - {'error': {'message': 'max_tokens too large'}}", task='revise')
         self.assertIn("couldn't process this request", denial.ai_error)
         self.assertNotIn('Error code', denial.ai_error)
+
+
+class PaymentSafetyTests(StaffTestMixin, TestCase):
+    """From the live-site test: a $10,000 payment on a $36 balance was
+    accepted, and a payment could never be undone outside the admin panel."""
+
+    def setUp(self):
+        super().setUp()
+        self.invoice.subtotal, self.invoice.insurance_amount = 136, 100
+        self.invoice.save()
+
+    def _pay(self, amount, **extra):
+        return self.client.post(reverse('payment_add', args=[self.invoice.pk]),
+                                {'amount': amount, 'method': 'card', 'notes': '', **extra})
+
+    def test_overpayment_asks_first(self):
+        response = self._pay('3600')
+        self.assertContains(response, '$3,600.00 is $3,564.00 more than the $36.00 balance due')
+        self.assertContains(response, 'Keep the extra as a credit')
+        self.assertContains(response, 'value="3600"')
+        self.assertFalse(Payment.objects.exists())
+
+    def test_overpayment_kept_as_credit_when_confirmed(self):
+        response = self._pay('50', allow_credit='on')
+        self.assertRedirects(response, reverse('invoice_detail', args=[self.invoice.pk]))
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, 'paid')
+        page = self.client.get(reverse('invoice_detail', args=[self.invoice.pk]))
+        self.assertContains(page, 'Credit')
+        self.assertContains(page, '$14.00')
+
+    def test_exact_payment_needs_no_confirmation(self):
+        self.assertRedirects(self._pay('36'), reverse('invoice_detail', args=[self.invoice.pk]))
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, 'paid')
+
+    def test_void_needs_a_reason(self):
+        self._pay('20')
+        payment = Payment.objects.get()
+        self.client.post(reverse('payment_void', args=[payment.pk]), {'reason': '  '})
+        payment.refresh_from_db()
+        self.assertTrue(payment.is_active)
+
+    def test_void_undoes_the_payment_and_keeps_a_record(self):
+        self._pay('36')
+        payment = Payment.objects.get()
+        response = self.client.post(reverse('payment_void', args=[payment.pk]),
+                                    {'reason': 'Card was declined'}, follow=True)
+        self.assertContains(response, 'Voided the $36.00 payment')
+        payment = Payment.all_objects.get(pk=payment.pk)
+        self.assertFalse(payment.is_active)
+        self.assertEqual((payment.void_reason, payment.deleted_by), ('Card was declined', self.staff))
+        self.invoice.refresh_from_db()
+        self.assertEqual((self.invoice.status, self.invoice.balance_due()), ('pending', 36))
+        self.assertContains(response, 'Voided')
+        self.assertContains(response, 'Card was declined')
+        self.assertContains(response, 'Record Payment')  # the form is back for the real payment
+
+
+class ToothNumberCheckTests(StaffTestMixin, TestCase):
+    def test_impossible_tooth_number_is_refused(self):
+        from clinical.validators import validate_tooth_list
+        from django.core.exceptions import ValidationError
+        for ok in ('14', '#3, #4', '2-5, 12-15', '18 - 20', 'A', 'UR', ''):
+            validate_tooth_list(ok)
+        for bad in ('999', '0', '33', '5-2', 'tooth'):
+            with self.assertRaises(ValidationError, msg=bad):
+                validate_tooth_list(bad)
+
+    def test_invoice_line_with_tooth_999_is_refused(self):
+        response = self.client.post(reverse('line_item_add', args=[self.invoice.pk]), {
+            'service_date': '2026-09-01', 'cdt_code': 'D2391', 'tooth_number': '999', 'surfaces': '',
+            'description': 'Composite', 'fee': '150'}, follow=True)
+        self.assertContains(response, 'isn&#x27;t a tooth number')
+        self.assertFalse(InvoiceLineItem.objects.exists())
+
+
+class AIUsageRefundTests(TestCase):
+    """From the live-site test: a damaged PDF still used up one of the
+    demo's daily AI runs."""
+
+    def setUp(self):
+        patient = Patient.objects.create(first_name='E', last_name='R', phone='1', date_of_birth=datetime.date(1990, 1, 1))
+        invoice = Invoice.objects.create(patient=patient, subtotal=100)
+        self.denial = ClaimDenial.objects.create(invoice=invoice, letter='x.pdf')
+
+    def _start(self, call):
+        from .ai import start_ai_task
+        with mock.patch.dict('billing.ai.TASKS', {'analyze': (call, lambda denial, result: None)}):
+            start_ai_task(self.denial, 'analyze')
+        self.denial.refresh_from_db()
+
+    def test_rejected_file_is_not_counted(self):
+        import anthropic
+        error = anthropic.BadRequestError.__new__(anthropic.BadRequestError)
+        error.message = 'The PDF specified was not valid.'
+        self._start(mock.Mock(side_effect=error))
+        self.assertEqual(self.denial.ai_status, 'failed')
+        self.assertEqual(AIUsage.objects.count(), 0)
+
+    def test_a_run_the_ai_finished_is_counted(self):
+        from .ai import AnalysisError
+        self._start(mock.Mock(side_effect=AnalysisError('cut off', billed=True)))
+        self.assertEqual(AIUsage.objects.count(), 1)
+        self._start(mock.Mock(return_value={}))
+        self.assertEqual(AIUsage.objects.count(), 2)

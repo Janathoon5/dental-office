@@ -42,11 +42,11 @@
                                 </a>
                             </td>
                             <td>{{ inv.date_issued|date:"M j, Y" }}</td>
-                            <td>${{ inv.subtotal }}</td>
-                            <td>${{ inv.insurance_amount }}</td>
-                            <td>${{ inv.patient_owes }}</td>
+                            <td>{{ inv.subtotal|money }}</td>
+                            <td>{{ inv.insurance_amount|money }}</td>
+                            <td>{{ inv.patient_owes|money }}</td>
                             <td class="fw-semibold {% if inv.balance_due > 0 %}text-danger{% else %}text-success{% endif %}">
-                                ${{ inv.balance_due }}
+                                {% if inv.credit %}{{ inv.credit|money }} credit{% else %}{{ inv.balance_due|money }}{% endif %}
                             </td>
                             <td>
                                 <span class="badge {% if inv.status == 'paid' %}bg-success{% elif inv.status == 'partial' %}bg-warning text-dark{% else %}bg-danger{% endif %}">

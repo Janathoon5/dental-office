@@ -1,7 +1,7 @@
 import datetime
 
 from django.contrib.auth.models import Group, User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from patients.models import Patient
@@ -105,3 +105,109 @@ class AdminRedirectTests(TestCase):
     def test_logged_out_visitors_go_to_the_app_login(self):
         response = self.client.get('/admin/', follow=True)
         self.assertEqual(response.redirect_chain[-1][0], reverse('login') + '?next=/admin/')
+
+
+class MoneyFilterTests(TestCase):
+    def test_thousands_separator_and_negative_sign(self):
+        from decimal import Decimal
+        from dental_office.templatetags.office import money
+        self.assertEqual(money(Decimal('4405')), '$4,405.00')
+        self.assertEqual(money(Decimal('-9953.5')), '-$9,953.50')
+        self.assertEqual(money(36), '$36.00')
+        self.assertEqual(money(None), '')
+
+    def test_invoice_pages_use_it(self):
+        patient = Patient.objects.create(first_name='M', last_name='F', phone='1', date_of_birth=datetime.date(1990, 1, 1))
+        invoice = Invoice.objects.create(patient=patient, subtotal=4405, insurance_amount=0)
+        self.client.force_login(make_staff('deskmoney', 'receptionist'))
+        self.assertContains(self.client.get(reverse('invoice_detail', args=[invoice.pk])), '$4,405.00')
+        self.assertContains(self.client.get(reverse('invoice_list')), '$4,405.00')
+
+
+class ClientIPTests(TestCase):
+    """Behind Railway's proxy, REMOTE_ADDR is the proxy and changes between
+    requests; the visitor's address is the last public one in
+    X-Forwarded-For."""
+
+    def _ip(self, forwarded=None, remote='100.64.0.7'):
+        from django.test import RequestFactory
+        from dental_office.security import client_ip
+        extra = {'REMOTE_ADDR': remote}
+        if forwarded is not None:
+            extra['HTTP_X_FORWARDED_FOR'] = forwarded
+        return client_ip(RequestFactory().get('/', **extra))
+
+    def test_reads_the_visitor_address_added_by_the_proxy(self):
+        self.assertEqual(self._ip('81.2.69.142'), '81.2.69.142')
+        self.assertEqual(self._ip('81.2.69.142, 10.0.0.5'), '81.2.69.142')
+
+    def test_a_typed_in_address_can_not_hide_the_real_one(self):
+        self.assertEqual(self._ip('1.2.3.4, 81.2.69.142'), '81.2.69.142')
+        self.assertEqual(self._ip('not-an-ip, 81.2.69.142'), '81.2.69.142')
+
+    def test_falls_back_to_the_connection_address(self):
+        self.assertEqual(self._ip(None, remote='127.0.0.1'), '127.0.0.1')
+
+
+class LoginLockoutTests(TestCase):
+    """Regression guard: on the live server every attempt came from a
+    different proxy address, so wrong passwords never locked an account."""
+
+    def setUp(self):
+        User.objects.create_user('lockme', password='right-password')
+
+    def _attempt(self, n, visitor='81.2.69.142'):
+        return self.client.post(reverse('login'), {'username': 'lockme', 'password': 'wrong'},
+                                REMOTE_ADDR=f'100.64.0.{n}', HTTP_X_FORWARDED_FOR=visitor)
+
+    def test_five_wrong_passwords_lock_the_account_with_a_clear_message(self):
+        responses = [self._attempt(n) for n in range(1, 6)]
+        self.assertEqual(responses[0].status_code, 200)
+        self.assertEqual(responses[-1].status_code, 429)
+        self.assertContains(responses[-1], 'Too many incorrect sign-in attempts', status_code=429)
+        # Locked even with the right password now.
+        response = self.client.post(reverse('login'), {'username': 'lockme', 'password': 'right-password'},
+                                    REMOTE_ADDR='100.64.0.9', HTTP_X_FORWARDED_FOR='81.2.69.142')
+        self.assertEqual(response.status_code, 429)
+
+    def test_someone_else_is_not_locked_out(self):
+        for n in range(1, 6):
+            self._attempt(n)
+        response = self.client.post(reverse('login'), {'username': 'lockme', 'password': 'right-password'},
+                                    HTTP_X_FORWARDED_FOR='81.2.69.200')
+        self.assertEqual(response.status_code, 302)
+
+
+class FriendlyErrorPageTests(TestCase):
+    def test_missing_page_has_a_way_back(self):
+        response = self.client.get('/no-such-page/')
+        self.assertContains(response, 'Page not found', status_code=404)
+        self.assertContains(response, 'href="/"', status_code=404)
+
+    @override_settings(RATELIMIT_ENABLE=True)
+    def test_too_many_requests_page(self):
+        url = reverse('appointment_request')
+        for n in range(10):
+            self.client.get(url, REMOTE_ADDR=f'100.64.1.{n}', HTTP_X_FORWARDED_FOR='81.2.69.77')
+        response = self.client.get(url, REMOTE_ADDR='100.64.1.99', HTTP_X_FORWARDED_FOR='81.2.69.77')
+        self.assertContains(response, 'Please wait a moment', status_code=429)
+
+
+class RolePageTests(TestCase):
+    def test_dentist_only_page_explains_the_bounce(self):
+        self.client.force_login(make_staff('deskrole', 'receptionist'))
+        response = self.client.get(reverse('reports'), follow=True)
+        self.assertEqual(response.redirect_chain[-1][0], reverse('dashboard'))
+        self.assertContains(response, 'Only dentists can open that page.')
+
+    def test_hygienist_dashboard_has_their_schedule_and_badge(self):
+        hygienist = make_staff('hygdash', 'hygienist')
+        patient = Patient.objects.create(first_name='H', last_name='D', phone='1', date_of_birth=datetime.date(1990, 1, 1))
+        from appointments.models import Appointment
+        from django.utils import timezone
+        Appointment.objects.create(patient=patient, dentist=hygienist, date=timezone.localdate(),
+                                   start_time=datetime.time(9, 0), appointment_type='cleaning')
+        self.client.force_login(hygienist)
+        page = self.client.get(reverse('dashboard'))
+        self.assertContains(page, 'My Schedule Today')
+        self.assertContains(page, '>Hygienist</span>')

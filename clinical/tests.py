@@ -215,4 +215,47 @@ class ProviderChoiceTests(TestCase):
             'patient': self.patient.pk, 'dentist': self.patient_user.pk, 'date': '2026-01-05',
             'procedure': 'Exam', 'tooth_number': '', 'notes': 'Edited',
         })
-        self.assertRedirects(response, reverse('patient_detail', args=[self.patient.pk]))
+        self.assertRedirects(response, reverse('record_detail', args=[record.pk]))
+
+
+class ClinicalNoteReadingTests(TestCase):
+    """From the live-site test: notes could only be read by opening the Edit
+    form, which invites accidental changes."""
+
+    def setUp(self):
+        self.patient = Patient.objects.create(first_name='Read', last_name='Notes', phone='555-0000',
+                                              date_of_birth=datetime.date(1990, 1, 1))
+        self.record = TreatmentRecord.objects.create(patient=self.patient, date=datetime.date(2026, 9, 1),
+                                                     procedure='Adult cleaning', notes='Light calculus, good home care.')
+
+    def test_hygienist_reads_notes_without_the_edit_form(self):
+        self.client.force_login(make_staff('hygread', 'hygienist'))
+        detail = self.client.get(reverse('patient_detail', args=[self.patient.pk]))
+        self.assertContains(detail, reverse('record_detail', args=[self.record.pk]))
+        self.assertContains(detail, reverse('record_add', args=[self.patient.pk]))
+        page = self.client.get(reverse('record_detail', args=[self.record.pk]))
+        self.assertContains(page, 'Light calculus, good home care.')
+        self.assertNotContains(page, '<textarea')
+
+    def test_front_desk_is_told_why_not(self):
+        self.client.force_login(make_staff('deskread', 'receptionist'))
+        response = self.client.get(reverse('record_detail', args=[self.record.pk]), follow=True)
+        self.assertContains(response, 'Only dentists and hygienists can open that page.')
+        self.assertNotContains(response, 'Light calculus')
+
+    def test_record_form_checks_tooth_numbers_and_lists_only_this_patients_visits(self):
+        from appointments.models import Appointment
+        other = Patient.objects.create(first_name='Other', last_name='Person', phone='555-0001',
+                                       date_of_birth=datetime.date(1980, 1, 1))
+        mine = Appointment.objects.create(patient=self.patient, date=datetime.date(2026, 9, 1), start_time=datetime.time(9, 0))
+        theirs = Appointment.objects.create(patient=other, date=datetime.date(2026, 9, 1), start_time=datetime.time(10, 0))
+        dentist = make_staff('drread', 'dentist')
+        self.client.force_login(dentist)
+        page = self.client.get(reverse('record_add', args=[self.patient.pk]))
+        self.assertContains(page, f'<option value="{mine.pk}"')
+        self.assertNotContains(page, f'<option value="{theirs.pk}"')
+        response = self.client.post(reverse('record_add', args=[self.patient.pk]), {
+            'patient': self.patient.pk, 'dentist': dentist.pk, 'date': '2026-09-01', 'procedure': 'Filling',
+            'tooth_number': '999', 'notes': ''})
+        self.assertContains(response, 'isn&#x27;t a tooth number')
+        self.assertEqual(TreatmentRecord.objects.count(), 1)
