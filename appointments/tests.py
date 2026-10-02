@@ -302,3 +302,90 @@ class DailyEmailJobTests(TestCase):
 
         ScheduledJobRun.objects.filter(pk=run.pk).update(ran_at=timezone.now() - datetime.timedelta(hours=30))
         self.assertContains(self.client.get(reverse('recall_list')), "hasn't run in over a day")
+
+
+class AppointmentFormFixesTests(TestCase):
+    """Regression guards from the live-site test: past appointments must be
+    editable, and every form error must reach the screen."""
+
+    def setUp(self):
+        from django.utils import timezone
+        self.today = timezone.localdate()
+        self.patient = Patient.objects.create(first_name='Fix', last_name='Patient',
+                                              date_of_birth=datetime.date(1990, 1, 1), phone='555-0000')
+        self.other = Patient.objects.create(first_name='Other', last_name='Patient',
+                                            date_of_birth=datetime.date(1990, 1, 1), phone='555-0001')
+        self.dentist = User.objects.create_user('drfix', password='pw', first_name='Elena', last_name='Park')
+        StaffProfile.objects.create(user=self.dentist, role='dentist')
+        self.staff = User.objects.create_user('deskfix', password='pw')
+        StaffProfile.objects.create(user=self.staff, role='receptionist')
+        TOTPDevice.objects.create(user=self.staff, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        self.client.force_login(self.staff)
+
+    def _data(self, **overrides):
+        data = {'patient': self.patient.pk, 'dentist': self.dentist.pk, 'date': self.today.isoformat(),
+                'start_time': '10:00', 'duration_minutes': 60, 'appointment_type': 'checkup',
+                'status': 'scheduled', 'notes': ''}
+        data.update(overrides)
+        return data
+
+    def test_double_booking_message_is_shown(self):
+        Appointment.objects.create(patient=self.other, dentist=self.dentist, date=self.today,
+                                   start_time=datetime.time(10, 0), duration_minutes=60)
+        response = self.client.post(reverse('appointment_add'), self._data(start_time='10:15'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'already has an appointment')
+
+    def test_bad_duration_message_is_shown(self):
+        response = self.client.post(reverse('appointment_add'), self._data(duration_minutes='-30'))
+        self.assertContains(response, 'Ensure this value is greater than or equal to 0.')
+
+    def test_past_appointment_can_be_marked_completed(self):
+        past = Appointment.objects.create(patient=self.patient, dentist=self.dentist,
+                                          date=self.today - datetime.timedelta(days=6),
+                                          start_time=datetime.time(10, 0), status='no_show')
+        form_page = self.client.get(reverse('appointment_edit', args=[past.pk]))
+        self.assertNotContains(form_page, f'min="{self.today.isoformat()}"')
+        response = self.client.post(reverse('appointment_edit', args=[past.pk]),
+                                    self._data(date=past.date.isoformat(), status='completed', notes='Came in late'))
+        self.assertRedirects(response, reverse('appointment_detail', args=[past.pk]))
+        past.refresh_from_db()
+        self.assertEqual((past.status, past.notes), ('completed', 'Came in late'))
+
+    def test_past_dates_still_blocked_for_new_and_moved_appointments(self):
+        yesterday = (self.today - datetime.timedelta(days=1)).isoformat()
+        response = self.client.post(reverse('appointment_add'), self._data(date=yesterday))
+        self.assertContains(response, "can&#x27;t be booked on a past date")
+        future = Appointment.objects.create(patient=self.patient, dentist=self.dentist,
+                                            date=self.today + datetime.timedelta(days=3), start_time=datetime.time(9, 0))
+        response = self.client.post(reverse('appointment_edit', args=[future.pk]), self._data(date=yesterday))
+        self.assertContains(response, "can&#x27;t be booked on a past date")
+
+    def test_provider_dropdown_shows_names(self):
+        page = self.client.get(reverse('appointment_add'))
+        self.assertContains(page, 'Dr. Elena Park (Dentist)')
+        self.assertNotContains(page, '>drfix<')
+
+
+class SendNowMessageTests(TestCase):
+    def setUp(self):
+        from django.utils import timezone
+        self.staff = User.objects.create_user('desksend', password='pw')
+        StaffProfile.objects.create(user=self.staff, role='receptionist')
+        TOTPDevice.objects.create(user=self.staff, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        self.client.force_login(self.staff)
+        patient = Patient.objects.create(first_name='Send', last_name='Now', phone='1', email='s@example.com',
+                                         date_of_birth=datetime.date(1990, 1, 1))
+        Appointment.objects.create(patient=patient, date=timezone.localdate() + datetime.timedelta(days=1),
+                                   start_time=datetime.time(9, 0))
+
+    def test_reminder_result_is_a_readable_sentence_shown_once(self):
+        response = self.client.post(reverse('send_reminders_now'), {'days': 1}, follow=True)
+        self.assertContains(response, '1 reminder sent.', count=1)
+        self.assertNotContains(response, '1,0,0,0')
+        response = self.client.post(reverse('send_reminders_now'), {'days': 1}, follow=True)
+        self.assertContains(response, '0 reminders sent. 1 already sent.', count=1)
+
+    def test_recall_result_is_a_readable_sentence(self):
+        response = self.client.post(reverse('send_recalls_now'), follow=True)
+        self.assertContains(response, 'No recall emails were due.', count=1)

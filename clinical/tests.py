@@ -111,3 +111,108 @@ class ToothChartTests(TestCase):
         for bad in ('abc', '99'):
             self.assertEqual(self.client.get(reverse('tooth_chart', args=[self.patient.pk]), {'tooth': bad}).status_code, 200)
         self.assertContains(self.client.get(reverse('patient_detail', args=[self.patient.pk])), 'class="tooth-chart"')
+
+
+class TreatmentPlanEditingTests(TestCase):
+    """Regression guard: adding plan items used to fail silently because the
+    form required a status field the page never showed."""
+
+    def setUp(self):
+        self.patient = Patient.objects.create(first_name='Plan', last_name='Patient',
+                                              date_of_birth=datetime.date(1990, 1, 1), phone='555-0000')
+        self.plan = TreatmentPlan.objects.create(patient=self.patient, title='Restore #14')
+        self.dentist = make_staff('drplan', 'dentist')
+        self.receptionist = make_staff('deskplan', 'receptionist')
+        self.url = reverse('plan_detail', args=[self.plan.pk])
+
+    def test_dentist_can_add_an_item_with_just_procedure_tooth_and_cost(self):
+        self.client.force_login(self.dentist)
+        response = self.client.post(self.url, {'procedure': 'Crown', 'tooth_number': '14', 'estimated_cost': '1500'})
+        self.assertRedirects(response, self.url)
+        item = self.plan.items.get()
+        self.assertEqual((item.procedure, item.tooth_number, item.status), ('Crown', '14', 'pending'))
+
+    def test_invalid_item_shows_why(self):
+        self.client.force_login(self.dentist)
+        response = self.client.post(self.url, {'procedure': '', 'estimated_cost': 'abc'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'This field is required.')
+        self.assertContains(response, 'Enter a number.')
+        self.assertFalse(self.plan.items.exists())
+
+    def test_non_dentists_can_view_but_not_change_plans(self):
+        self.client.force_login(self.receptionist)
+        page = self.client.get(self.url)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'Only a dentist can change this treatment plan.')
+        self.assertNotContains(page, 'Edit Plan')
+        self.client.post(self.url, {'procedure': 'Crown', 'estimated_cost': '1'})
+        self.assertFalse(self.plan.items.exists())
+
+    def test_dentist_can_change_plan_status_but_not_its_patient(self):
+        other = Patient.objects.create(first_name='Other', last_name='Person',
+                                       date_of_birth=datetime.date(1990, 1, 1), phone='555-1111')
+        self.client.force_login(self.dentist)
+        response = self.client.post(reverse('plan_edit', args=[self.plan.pk]), {
+            'title': 'Restore #14 and #15', 'status': 'accepted', 'notes': 'Patient agreed.', 'patient': other.pk,
+        })
+        self.assertRedirects(response, self.url)
+        self.plan.refresh_from_db()
+        self.assertEqual((self.plan.title, self.plan.status, self.plan.patient), ('Restore #14 and #15', 'accepted', self.patient))
+
+    def test_items_can_be_edited_completed_and_removed(self):
+        item = TreatmentPlanItem.objects.create(plan=self.plan, procedure='Crown', tooth_number='14', estimated_cost=1500)
+        self.client.force_login(self.dentist)
+        self.client.post(reverse('plan_item_edit', args=[item.pk]),
+                         {'procedure': 'Crown, porcelain', 'tooth_number': '14', 'estimated_cost': '1450', 'status': 'pending'})
+        item.refresh_from_db()
+        self.assertEqual((item.procedure, str(item.estimated_cost)), ('Crown, porcelain', '1450.00'))
+
+        # Completing an item is a button (POST) now, not a link anyone could visit.
+        self.assertEqual(self.client.get(reverse('plan_item_toggle', args=[item.pk])).status_code, 405)
+        self.client.post(reverse('plan_item_toggle', args=[item.pk]))
+        item.refresh_from_db()
+        self.assertEqual(item.status, 'completed')
+
+        self.client.post(reverse('plan_item_delete', args=[item.pk]))
+        self.assertFalse(TreatmentPlanItem.objects.filter(pk=item.pk).exists())
+
+    def test_receptionist_cannot_edit_or_remove_items(self):
+        item = TreatmentPlanItem.objects.create(plan=self.plan, procedure='Crown', estimated_cost=1500)
+        self.client.force_login(self.receptionist)
+        self.client.post(reverse('plan_item_delete', args=[item.pk]))
+        self.client.post(reverse('plan_item_edit', args=[item.pk]), {'procedure': 'X', 'estimated_cost': '1', 'status': 'completed'})
+        item.refresh_from_db()
+        self.assertEqual(item.procedure, 'Crown')
+
+
+class ProviderChoiceTests(TestCase):
+    def setUp(self):
+        self.patient = Patient.objects.create(first_name='Pro', last_name='Vider',
+                                              date_of_birth=datetime.date(1990, 1, 1), phone='555-0000')
+        self.dentist = make_staff('drnames', 'dentist')
+        self.dentist.first_name, self.dentist.last_name = 'Elena', 'Park'
+        self.dentist.save()
+        self.hygienist = make_staff('hygnames', 'hygienist')
+        self.hygienist.first_name, self.hygienist.last_name = 'Marcus', 'Reed'
+        self.hygienist.save()
+        self.patient_user = User.objects.create_user('portaluser', password='x')
+
+    def test_clinical_note_lists_providers_by_name_only(self):
+        self.client.force_login(self.dentist)
+        page = self.client.get(reverse('record_add', args=[self.patient.pk]))
+        self.assertContains(page, 'Dr. Elena Park (Dentist)')
+        self.assertContains(page, 'Marcus Reed (Hygienist)')
+        self.assertNotContains(page, '>portaluser<')
+        # Defaults to whoever is writing the note.
+        self.assertContains(page, f'<option value="{self.dentist.pk}" selected>', html=False)
+
+    def test_older_record_with_a_non_provider_still_saves(self):
+        record = TreatmentRecord.objects.create(patient=self.patient, dentist=self.patient_user,
+                                                date=datetime.date(2026, 1, 5), procedure='Exam')
+        self.client.force_login(self.dentist)
+        response = self.client.post(reverse('record_edit', args=[record.pk]), {
+            'patient': self.patient.pk, 'dentist': self.patient_user.pk, 'date': '2026-01-05',
+            'procedure': 'Exam', 'tooth_number': '', 'notes': 'Edited',
+        })
+        self.assertRedirects(response, reverse('patient_detail', args=[self.patient.pk]))

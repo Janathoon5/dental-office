@@ -1,4 +1,5 @@
 from django import forms
+from dental_office.providers import ProviderChoiceField, limit_to_providers
 from .models import TreatmentRecord, TreatmentPlan, TreatmentPlanItem, ToothCondition
 
 
@@ -10,6 +11,11 @@ class TreatmentRecordForm(forms.ModelForm):
             'date': forms.DateInput(attrs={'type': 'date'}),
             'notes': forms.Textarea(attrs={'rows': 4}),
         }
+        field_classes = {'dentist': ProviderChoiceField}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        limit_to_providers(self.fields['dentist'], current=self.instance.dentist if self.instance.pk else None)
 
 
 class TreatmentPlanForm(forms.ModelForm):
@@ -22,6 +28,13 @@ class TreatmentPlanForm(forms.ModelForm):
 
 
 class TreatmentPlanItemForm(forms.ModelForm):
+    """Adding an item: it always starts as Pending."""
+    class Meta:
+        model = TreatmentPlanItem
+        fields = ['procedure', 'tooth_number', 'estimated_cost']
+
+
+class TreatmentPlanItemEditForm(forms.ModelForm):
     class Meta:
         model = TreatmentPlanItem
         fields = ['procedure', 'tooth_number', 'estimated_cost', 'status']

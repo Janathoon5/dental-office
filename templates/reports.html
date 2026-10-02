@@ -55,17 +55,17 @@ const revenueCtx = document.getElementById('revenueChart');
 new Chart(revenueCtx, {
     type: 'bar',
     data: {
-        labels: {{ revenue_labels|safe }},
+        labels: {{ revenue_labels|default:'[]'|safe }},
         datasets: [
             {
                 label: 'Patient Portion',
-                data: {{ revenue_patient|safe }},
+                data: {{ revenue_patient|default:'[]'|safe }},
                 backgroundColor: '#1a3a5c',
                 borderRadius: 4,
             },
             {
                 label: 'Insurance',
-                data: {{ revenue_insurance|safe }},
+                data: {{ revenue_insurance|default:'[]'|safe }},
                 backgroundColor: '#90afc5',
                 borderRadius: 4,
             }
@@ -82,9 +82,9 @@ const typeCtx = document.getElementById('typeChart');
 new Chart(typeCtx, {
     type: 'doughnut',
     data: {
-        labels: {{ type_labels|safe }},
+        labels: {{ type_labels|default:'[]'|safe }},
         datasets: [{
-            data: {{ type_counts|safe }},
+            data: {{ type_counts|default:'[]'|safe }},
             backgroundColor: ['#1a3a5c','#2e6da4','#5b9bd5','#90afc5','#c6d9f1','#e8f0f9'],
         }]
     },

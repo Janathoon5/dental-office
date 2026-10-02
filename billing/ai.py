@@ -405,8 +405,15 @@ def run_ai_task(denial_id):
     except anthropic.RateLimitError:
         denial.ai_status, denial.ai_error = 'failed', 'The AI service is busy right now. Try again in a minute.'
     except anthropic.BadRequestError as e:
+        # The technical detail goes to the logs; staff get a plain next step.
         logger.exception('AI request rejected for denial %s', denial_id)
-        denial.ai_status, denial.ai_error = 'failed', f'The AI could not process this request: {e.message}'
+        detail = str(e.message).lower()
+        if denial.ai_task == 'analyze' and any(word in detail for word in ('pdf', 'image', 'document', 'media')):
+            message = ("This file couldn't be read. Try scanning the letter again, "
+                       "or upload a photo of it instead.")
+        else:
+            message = "The AI couldn't process this request. Try again, or contact support if it keeps happening."
+        denial.ai_status, denial.ai_error = 'failed', message
     except (anthropic.APIStatusError, anthropic.APIConnectionError):
         logger.exception('AI request failed for denial %s', denial_id)
         denial.ai_status, denial.ai_error = 'failed', 'Could not reach the AI service. Try again in a few minutes.'

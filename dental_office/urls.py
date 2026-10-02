@@ -1,8 +1,9 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth import views as auth_views
 from django.shortcuts import redirect
 from django.urls import path, include, reverse
 from . import views
+from .roles import get_post_login_redirect
 from staff.views import login_view, verify_otp
 
 
@@ -13,7 +14,12 @@ def _admin_login_redirect(request, extra_context=None):
     app's own login page keeps every session — admin or not — going through
     the same 2FA gate."""
     if request.user.is_authenticated:
-        return redirect('admin:index')
+        if admin.site.has_permission(request):
+            return redirect('admin:index')
+        # Logged in but not an admin: the admin would send them straight back
+        # here, so send them to their own home page instead of looping.
+        messages.info(request, 'The admin panel is only for site administrators.')
+        return redirect(get_post_login_redirect(request.user))
     next_url = request.GET.get('next') or reverse('admin:index')
     return redirect(f"{reverse('login')}?next={next_url}")
 

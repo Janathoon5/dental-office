@@ -163,16 +163,29 @@ def send_reminders_now(request):
         except ValueError:
             days = 1
         force = request.POST.get('force') == '1'
-        out = io.StringIO()
         try:
-            call_command('send_reminders', days=days, force=force, stdout=out)
-            output = out.getvalue()
-            # Parse summary line
-            last_line = [l for l in output.strip().splitlines() if l.strip()][-1]
-            messages.success(request, f"Reminders sent. {last_line}")
+            counts = call_command('send_reminders', days=days, force=force, stdout=io.StringIO())
+            _report_email_counts(request, counts, 'reminder')
         except Exception as e:
             messages.error(request, f"Error sending reminders: {e}")
     return redirect('reminders_dashboard')
+
+
+def _report_email_counts(request, counts, noun):
+    """Turn an email command's "sent,skipped,no_email,failed" result into a
+    sentence for staff, e.g. "1 reminder sent. 3 already sent."."""
+    sent, skipped, no_email, failed = (int(n) for n in counts.split(','))
+    parts = [f"{sent} {noun}{'' if sent == 1 else 's'} sent"]
+    if skipped:
+        parts.append(f"{skipped} already sent")
+    if no_email:
+        parts.append(f"{no_email} skipped because there's no email address on file")
+    if failed:
+        parts.append(f"{failed} failed to send")
+    text = '. '.join(parts) + '.'
+    if not any((sent, skipped, no_email, failed)):
+        text = f'No {noun}s were due.'
+    (messages.warning if failed else messages.success)(request, text)
 
 
 RECALL_TABS = [
@@ -200,11 +213,9 @@ def recall_list(request):
 @staff_required
 def send_recalls_now(request):
     if request.method == 'POST':
-        out = io.StringIO()
         try:
-            call_command('send_recall_reminders', stdout=out)
-            last_line = [l for l in out.getvalue().strip().splitlines() if l.strip()][-1]
-            messages.success(request, last_line)
+            counts = call_command('send_recall_reminders', stdout=io.StringIO())
+            _report_email_counts(request, counts, 'recall email')
         except Exception as e:
             messages.error(request, f"Error sending recall emails: {e}")
     return redirect('recall_list')

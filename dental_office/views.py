@@ -115,6 +115,7 @@ def reports(request):
         'revenue_labels': json.dumps(revenue_labels),
         'revenue_totals': json.dumps(revenue_totals),
         'revenue_patient': json.dumps(revenue_patient),
+        'revenue_insurance': json.dumps(revenue_insurance),
         'type_labels': json.dumps(type_labels),
         'type_counts': json.dumps(type_counts),
         'total_revenue': total_revenue,

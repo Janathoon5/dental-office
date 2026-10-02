@@ -16,12 +16,6 @@
             {{ secret }}
         </div>
 
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-danger py-2 small">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-
         <form method="post">
             {% csrf_token %}
             <label class="form-label fw-semibold">Enter the 6-digit code to confirm</label>

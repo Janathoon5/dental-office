@@ -1,7 +1,7 @@
 import datetime
 from django import forms
-from django.contrib.auth.models import User
 from django.utils import timezone
+from dental_office.providers import ProviderChoiceField, limit_to_providers, provider_label
 from .models import Appointment, AppointmentRequest
 
 OFFICE_OPEN  = datetime.time(8, 0)   # 8:00 AM
@@ -17,19 +17,25 @@ class AppointmentForm(forms.ModelForm):
             'start_time': forms.TimeInput(attrs={'type': 'time'}),
             'notes': forms.Textarea(attrs={'rows': 3}),
         }
+        field_classes = {'dentist': ProviderChoiceField}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['dentist'].queryset = User.objects.filter(staff_profile__role__in=['dentist', 'hygienist'])
+        limit_to_providers(self.fields['dentist'], current=self.instance.dentist if self.instance.pk else None)
         self.fields['dentist'].required = False
-        self.fields['date'].widget.attrs['min'] = timezone.localdate().isoformat()
+        if not self.instance.pk:
+            self.fields['date'].widget.attrs['min'] = timezone.localdate().isoformat()
         self.fields['start_time'].widget.attrs['min'] = OFFICE_OPEN.strftime('%H:%M')
         self.fields['start_time'].widget.attrs['max'] = OFFICE_CLOSE.strftime('%H:%M')
 
     def clean_date(self):
+        # New bookings must be today or later, and so must a move to a new
+        # date. Past appointments can still be updated (marked completed or
+        # no-show, notes added) as long as their date stays the same.
         date = self.cleaned_data.get('date')
-        if date and date < timezone.localdate():
-            raise forms.ValidationError("Appointments cannot be booked on past dates.")
+        unchanged = self.instance.pk and date == self.instance.date
+        if date and date < timezone.localdate() and not unchanged:
+            raise forms.ValidationError("New appointments can't be booked on a past date.")
         return date
 
     def clean_start_time(self):
@@ -57,9 +63,11 @@ class AppointmentForm(forms.ModelForm):
                 other_start = datetime.datetime.combine(date, appt.start_time)
                 other_end = other_start + datetime.timedelta(minutes=appt.duration_minutes)
                 if start_dt < other_end and other_start < end_dt:
+                    name = provider_label(dentist).split(' (')[0]
                     raise forms.ValidationError(
-                        f"{dentist.get_full_name() or dentist.username} already has an appointment "
-                        f"at {appt.start_time.strftime('%I:%M %p')} on this date."
+                        f"{name} already has an appointment at "
+                        f"{appt.start_time.strftime('%I:%M %p').lstrip('0')} on this date. "
+                        f"Choose another time or provider."
                     )
         return cleaned_data
 

@@ -3,11 +3,13 @@ from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from auditlog.signals import accessed
 from django.contrib import messages
-from dental_office.roles import clinical_required, dentist_required, staff_required, is_clinical_staff
+from django.views.decorators.http import require_POST
+from dental_office.roles import clinical_required, dentist_required, staff_required, is_clinical_staff, is_dentist
 from patients.models import Patient
 from appointments.models import Appointment
 from .models import TreatmentRecord, TreatmentPlan, TreatmentPlanItem, ToothCondition
-from .forms import TreatmentRecordForm, TreatmentPlanForm, TreatmentPlanItemForm, ToothConditionForm
+from .forms import (TreatmentRecordForm, TreatmentPlanForm, TreatmentPlanItemEditForm, TreatmentPlanItemForm,
+                    ToothConditionForm)
 from .teeth import build_chart, tooth_info
 
 
@@ -15,6 +17,8 @@ from .teeth import build_chart, tooth_info
 def record_add(request, patient_pk):
     patient = get_object_or_404(Patient, pk=patient_pk)
     initial = {'patient': patient}
+    if is_clinical_staff(request.user):
+        initial['dentist'] = request.user
     appt_pk = request.GET.get('appointment')
     if appt_pk:
         try:
@@ -64,30 +68,79 @@ def plan_add(request, patient_pk):
             return redirect('plan_detail', pk=plan.pk)
     else:
         form = TreatmentPlanForm(initial={'patient': patient})
-        form.fields['patient'].widget = form.fields['patient'].hidden_widget()
+    form.fields['patient'].widget = form.fields['patient'].hidden_widget()
     return render(request, 'clinical/plan_form.html', {
         'form': form, 'patient': patient, 'title': 'New Treatment Plan'
     })
 
 
+@dentist_required
+def plan_edit(request, pk):
+    plan = get_object_or_404(TreatmentPlan, pk=pk)
+    if request.method == 'POST':
+        # The patient can't be changed by editing a plan.
+        form = TreatmentPlanForm({**request.POST.dict(), 'patient': plan.patient_id}, instance=plan)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Plan updated.')
+            return redirect('plan_detail', pk=plan.pk)
+    else:
+        form = TreatmentPlanForm(instance=plan)
+    form.fields['patient'].widget = form.fields['patient'].hidden_widget()
+    return render(request, 'clinical/plan_form.html', {
+        'form': form, 'patient': plan.patient, 'plan': plan, 'title': 'Edit Treatment Plan'
+    })
+
+
 @staff_required
 def plan_detail(request, pk):
+    """Any staff member can view a plan; only dentists change it."""
     plan = get_object_or_404(TreatmentPlan, pk=pk)
     accessed.send(sender=TreatmentPlan, instance=plan)
+    can_edit = request.user.is_superuser or is_dentist(request.user)
     item_form = TreatmentPlanItemForm()
     if request.method == 'POST':
+        if not can_edit:
+            messages.error(request, 'Only a dentist can change a treatment plan.')
+            return redirect('plan_detail', pk=pk)
         item_form = TreatmentPlanItemForm(request.POST)
         if item_form.is_valid():
             item = item_form.save(commit=False)
             item.plan = plan
             item.save()
+            messages.success(request, f'Added {item.procedure}.')
             return redirect('plan_detail', pk=pk)
     return render(request, 'clinical/plan_detail.html', {
-        'plan': plan, 'item_form': item_form
+        'plan': plan, 'item_form': item_form, 'can_edit': can_edit,
     })
 
 
 @dentist_required
+def plan_item_edit(request, pk):
+    item = get_object_or_404(TreatmentPlanItem, pk=pk)
+    if request.method == 'POST':
+        form = TreatmentPlanItemEditForm(request.POST, instance=item)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Updated {item.procedure}.')
+            return redirect('plan_detail', pk=item.plan_id)
+    else:
+        form = TreatmentPlanItemEditForm(instance=item)
+    return render(request, 'clinical/plan_item_form.html', {'form': form, 'item': item, 'plan': item.plan})
+
+
+@dentist_required
+@require_POST
+def plan_item_delete(request, pk):
+    item = get_object_or_404(TreatmentPlanItem, pk=pk)
+    plan_pk = item.plan_id
+    item.delete()
+    messages.success(request, f'Removed {item.procedure}.')
+    return redirect('plan_detail', pk=plan_pk)
+
+
+@dentist_required
+@require_POST
 def plan_item_toggle(request, pk):
     item = get_object_or_404(TreatmentPlanItem, pk=pk)
     item.status = 'completed' if item.status == 'pending' else 'pending'

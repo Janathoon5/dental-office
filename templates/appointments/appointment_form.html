@@ -7,6 +7,11 @@
     <div class="card-body">
         <form method="post" novalidate>
             {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger py-2" role="alert">
+                {% for e in form.non_field_errors %}<div><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ e }}</div>{% endfor %}
+            </div>
+            {% endif %}
             <div class="row g-3">
                 <div class="col-12">
                     <label class="form-label fw-semibold">Patient *</label>
@@ -26,22 +31,27 @@
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Duration (minutes)</label>
                     {{ form.duration_minutes }}
+                    {% for e in form.duration_minutes.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Type</label>
                     {{ form.appointment_type }}
+                    {% for e in form.appointment_type.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Status</label>
                     {{ form.status }}
+                    {% for e in form.status.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
                 <div class="col-12">
                     <label class="form-label fw-semibold">Dentist / Provider</label>
                     {{ form.dentist }}
+                    {% for e in form.dentist.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
                 <div class="col-12">
                     <label class="form-label fw-semibold">Notes</label>
                     {{ form.notes }}
+                    {% for e in form.notes.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
             </div>
 

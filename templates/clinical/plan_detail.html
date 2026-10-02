@@ -6,7 +6,10 @@
 <div class="row g-4">
     <div class="col-lg-4">
         <div class="card">
-            <div class="card-header fw-semibold"><i class="bi bi-list-check me-2"></i>Plan Info</div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-list-check me-2"></i>Plan Info</span>
+                {% if can_edit %}<a href="{% url 'plan_edit' plan.pk %}" class="btn btn-sm btn-outline-primary">Edit Plan</a>{% endif %}
+            </div>
             <div class="card-body">
                 <dl class="row mb-0">
                     <dt class="col-5 text-muted">Patient</dt>
@@ -14,7 +17,9 @@
                     <dt class="col-5 text-muted">Title</dt>
                     <dd class="col-7">{{ plan.title }}</dd>
                     <dt class="col-5 text-muted">Status</dt>
-                    <dd class="col-7"><span class="badge bg-secondary">{{ plan.get_status_display }}</span></dd>
+                    <dd class="col-7">
+                        <span class="badge {% if plan.status == 'completed' %}bg-success{% elif plan.status == 'in_progress' %}bg-primary{% elif plan.status == 'accepted' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ plan.get_status_display }}</span>
+                    </dd>
                     <dt class="col-5 text-muted">Created</dt>
                     <dd class="col-7">{{ plan.created_date|date:"M j, Y" }}</dd>
                     <dt class="col-5 text-muted">Est. Total</dt>
@@ -22,7 +27,7 @@
                 </dl>
                 {% if plan.notes %}
                     <hr>
-                    <p class="text-muted small mb-0">{{ plan.notes }}</p>
+                    <p class="text-muted small mb-0">{{ plan.notes|linebreaksbr }}</p>
                 {% endif %}
             </div>
         </div>
@@ -34,9 +39,9 @@
             <div class="card-body p-0">
                 {% if plan.items.all %}
                     <div class="table-responsive">
-                    <table class="table table-hover mb-0">
+                    <table class="table table-hover mb-0 align-middle">
                         <thead class="table-light">
-                            <tr><th>Procedure</th><th>Tooth</th><th>Est. Cost</th><th>Status</th><th></th></tr>
+                            <tr><th>Procedure</th><th>Tooth</th><th>Est. Cost</th><th>Status</th>{% if can_edit %}<th></th>{% endif %}</tr>
                         </thead>
                         <tbody>
                             {% for item in plan.items.all %}
@@ -49,11 +54,22 @@
                                         {{ item.get_status_display }}
                                     </span>
                                 </td>
-                                <td>
-                                    <a href="{% url 'plan_item_toggle' item.pk %}" class="btn btn-sm btn-outline-secondary">
-                                        {% if item.status == 'pending' %}Mark Done{% else %}Undo{% endif %}
-                                    </a>
+                                {% if can_edit %}
+                                <td class="text-end text-nowrap">
+                                    <form method="post" action="{% url 'plan_item_toggle' item.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-success">
+                                            {% if item.status == 'pending' %}Mark Done{% else %}Undo{% endif %}
+                                        </button>
+                                    </form>
+                                    <a href="{% url 'plan_item_edit' item.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                    <form method="post" action="{% url 'plan_item_delete' item.pk %}" class="d-inline"
+                                          onsubmit="return confirm('Remove {{ item.procedure|escapejs }} from this plan?')">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Remove {{ item.procedure }}"><i class="bi bi-trash"></i></button>
+                                    </form>
                                 </td>
+                                {% endif %}
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -65,23 +81,28 @@
             </div>
         </div>
 
+        {% if can_edit %}
         <div class="card">
             <div class="card-header fw-semibold"><i class="bi bi-plus-circle me-2"></i>Add Item</div>
             <div class="card-body">
                 <form method="post" novalidate>
                     {% csrf_token %}
+                    {% for e in item_form.non_field_errors %}<div class="alert alert-danger py-2">{{ e }}</div>{% endfor %}
                     <div class="row g-3">
                         <div class="col-md-5">
-                            <label class="form-label fw-semibold">Procedure *</label>
+                            <label class="form-label fw-semibold" for="{{ item_form.procedure.id_for_label }}">Procedure *</label>
                             {{ item_form.procedure }}
+                            {% for e in item_form.procedure.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label fw-semibold">Tooth #</label>
+                            <label class="form-label fw-semibold" for="{{ item_form.tooth_number.id_for_label }}">Tooth #</label>
                             {{ item_form.tooth_number }}
+                            {% for e in item_form.tooth_number.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-semibold">Est. Cost ($)</label>
+                            <label class="form-label fw-semibold" for="{{ item_form.estimated_cost.id_for_label }}">Est. Cost ($)</label>
                             {{ item_form.estimated_cost }}
+                            {% for e in item_form.estimated_cost.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
                             <button type="submit" class="btn btn-primary w-100">Add</button>
@@ -90,6 +111,9 @@
                 </form>
             </div>
         </div>
+        {% else %}
+        <p class="text-muted small"><i class="bi bi-lock me-1"></i>Only a dentist can change this treatment plan.</p>
+        {% endif %}
     </div>
 </div>
 <style>

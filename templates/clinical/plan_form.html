@@ -11,24 +11,31 @@
         <form method="post" novalidate>
             {% csrf_token %}
             {{ form.patient }}
+            {% for e in form.non_field_errors %}<div class="alert alert-danger py-2">{{ e }}</div>{% endfor %}
             <div class="row g-3">
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Plan Title *</label>
+                    <label class="form-label fw-semibold" for="{{ form.title.id_for_label }}">Plan Title *</label>
                     {{ form.title }}
                     {% for e in form.title.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">Status</label>
+                    <label class="form-label fw-semibold" for="{{ form.status.id_for_label }}">Status</label>
                     {{ form.status }}
+                    {% for e in form.status.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold">Notes</label>
+                    <label class="form-label fw-semibold" for="{{ form.notes.id_for_label }}">Notes</label>
                     {{ form.notes }}
+                    {% for e in form.notes.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                 </div>
             </div>
             <div class="mt-4 d-flex gap-2">
-                <button type="submit" class="btn btn-primary">Create Plan</button>
+                <button type="submit" class="btn btn-primary">{% if plan %}Save Changes{% else %}Create Plan{% endif %}</button>
+                {% if plan %}
+                <a href="{% url 'plan_detail' plan.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                {% else %}
                 <a href="{% url 'patient_detail' patient.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                {% endif %}
             </div>
         </form>
     </div>

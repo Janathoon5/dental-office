@@ -629,3 +629,37 @@ class LetterLayoutTests(TestCase):
             self.assertIsInstance(story[i + 1], Spacer)
             self.assertGreaterEqual(story[i + 1].height, 30)
             self.assertEqual(texts[i + 2], ('Paragraph', 'Dr. Smith'))
+
+
+class FriendlyAIErrorTests(TestCase):
+    """Regression guard: a damaged upload used to show staff the AI service's
+    raw error text (error codes and JSON)."""
+
+    def setUp(self):
+        patient = Patient.objects.create(first_name='E', last_name='R', phone='1', date_of_birth=datetime.date(1990, 1, 1))
+        invoice = Invoice.objects.create(patient=patient, subtotal=100)
+        self.denial = ClaimDenial.objects.create(invoice=invoice, letter='x.pdf', ai_status='processing')
+
+    def _fail_with(self, text, task='analyze'):
+        import anthropic
+        from .ai import run_ai_task
+        error = anthropic.BadRequestError.__new__(anthropic.BadRequestError)
+        error.message = text
+        self.denial.ai_task = task
+        self.denial.save()
+        # run_ai_task looks its steps up in TASKS, so swap them there.
+        failing = mock.Mock(side_effect=error)
+        with mock.patch.dict('billing.ai.TASKS', {'analyze': (failing, None), 'revise': (failing, None)}):
+            return run_ai_task(self.denial.pk)
+
+    def test_unreadable_pdf_gets_a_plain_next_step(self):
+        denial = self._fail_with("Error code: 400 - {'error': {'message': 'The PDF specified was not valid.'}}")
+        self.assertEqual(denial.ai_status, 'failed')
+        self.assertIn("couldn't be read", denial.ai_error)
+        self.assertNotIn('Error code', denial.ai_error)
+        self.assertNotIn('{', denial.ai_error)
+
+    def test_other_rejections_get_a_generic_message(self):
+        denial = self._fail_with("Error code: 400 - {'error': {'message': 'max_tokens too large'}}", task='revise')
+        self.assertIn("couldn't process this request", denial.ai_error)
+        self.assertNotIn('Error code', denial.ai_error)

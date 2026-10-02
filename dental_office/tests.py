@@ -1,11 +1,12 @@
 import datetime
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 
 from patients.models import Patient
 from billing.models import Invoice, Payment
+from staff.models import StaffProfile, TOTPDevice
 
 
 class SoftDeleteAdminFieldsTests(TestCase):
@@ -54,3 +55,53 @@ class SoftDeleteAdminFieldsTests(TestCase):
         self.payment.refresh_from_db()
         self.assertTrue(self.payment.is_active)
         self.assertIsNone(self.payment.deleted_at)
+
+
+def make_staff(username, role):
+    user = User.objects.create_user(username=username, password='pw')
+    StaffProfile.objects.create(user=user, role=role)
+    TOTPDevice.objects.create(user=user, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+    return user
+
+
+class ReportsPageTests(TestCase):
+    """Regression guard: the revenue chart's insurance series was never passed
+    to the page, which broke the script that draws both charts."""
+
+    def test_every_chart_series_is_filled_in(self):
+        patient = Patient.objects.create(first_name='R', last_name='P', phone='1', date_of_birth=datetime.date(1990, 1, 1))
+        Invoice.objects.create(patient=patient, subtotal=1500, insurance_amount=1150)
+        self.client.force_login(make_staff('drreports', 'dentist'))
+        page = self.client.get(reverse('reports')).content.decode()
+        self.assertNotIn('data: ,', page)
+        self.assertIn('data: [1150.0]', page)
+
+
+class AdminRedirectTests(TestCase):
+    """Regression guard: logged-in non-admins visiting /admin/ used to bounce
+    between the admin and its login page until the browser gave up."""
+
+    def test_patient_is_sent_to_their_portal(self):
+        user = User.objects.create_user('pt', password='pw')
+        user.groups.add(Group.objects.get_or_create(name='Patient')[0])
+        Patient.objects.create(first_name='P', last_name='T', phone='1', date_of_birth=datetime.date(1990, 1, 1), user=user)
+        self.client.force_login(user)
+        response = self.client.get('/admin/', follow=True)
+        self.assertEqual(response.redirect_chain[-1][0], reverse('patient_dashboard'))
+        self.assertContains(response, 'only for site administrators')
+
+    def test_staff_who_are_not_admins_go_to_the_dashboard(self):
+        self.client.force_login(make_staff('deskadmin', 'receptionist'))
+        response = self.client.get('/admin/', follow=True)
+        self.assertEqual(response.redirect_chain[-1][0], reverse('dashboard'))
+        self.assertLess(len(response.redirect_chain), 4)
+
+    def test_admins_still_reach_the_admin(self):
+        admin_user = User.objects.create_superuser('owner', 'o@example.com', 'pw')
+        TOTPDevice.objects.create(user=admin_user, secret='JBSWY3DPEHPK3PXP', confirmed=True)
+        self.client.force_login(admin_user)
+        self.assertEqual(self.client.get('/admin/').status_code, 200)
+
+    def test_logged_out_visitors_go_to_the_app_login(self):
+        response = self.client.get('/admin/', follow=True)
+        self.assertEqual(response.redirect_chain[-1][0], reverse('login') + '?next=/admin/')

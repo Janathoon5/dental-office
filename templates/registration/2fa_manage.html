@@ -13,12 +13,6 @@
             </div>
         </div>
 
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} py-2 small">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-
         <form method="post" action="{% url 'disable_2fa' %}">
             {% csrf_token %}
             <p class="text-muted small">To disable 2FA, click below. You will only need your password to log in after this.</p>
